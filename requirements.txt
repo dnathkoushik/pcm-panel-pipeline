@@ -1,0 +1,4 @@
+# Python packages for the pipeline driver and plots (system Python, not pvpython/FreeCAD)
+numpy>=1.24
+matplotlib>=3.7
+pyyaml>=6.0

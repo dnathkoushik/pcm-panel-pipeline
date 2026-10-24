@@ -1,0 +1,51 @@
+# =============================================================================
+# Parametric studies. Each study is the cartesian product of its `vary` lists,
+# applied on top of base_case.yaml. Keys use dotted paths into base_case.yaml.
+# Paper sections are given for the studies that reproduce published results.
+# =============================================================================
+
+validation:                       # Sec. 3.7 / 4.1 (Figs. 8-10)
+  vary:
+    panel.shape: [pyramid, tetrahedron]
+
+shapes:                           # new product comparison incl. hemispheres
+  vary:
+    panel.shape: [pyramid, tetrahedron, hemisphere]
+
+delta_T:                          # Sec. 4.2 (Fig. 11)
+  vary:
+    panel.shape: [pyramid, tetrahedron, hemisphere]
+    delta_T: [15, 20, 25, 30]
+
+shell_thickness:                  # Sec. 4.3 (Fig. 12)
+  vary:
+    panel.shape: [pyramid, tetrahedron, hemisphere]
+    panel.shell_thickness_mm: [1, 3, 5]
+
+protrusion_ratio:                 # Sec. 4.5 (Fig. 15)
+  vary:
+    panel.shape: [pyramid, tetrahedron, hemisphere]
+    panel.protrusion_ratio: [0.3, 0.5, 0.7]
+
+gap:                              # Sec. 4.6 (Fig. 17)
+  vary:
+    panel.shape: [pyramid, tetrahedron, hemisphere]
+    panel.gap_mm: [0, 3, 5]
+
+volume:                           # Sec. 4.7 (Fig. 18)
+  vary:
+    panel.shape: [pyramid, tetrahedron, hemisphere]
+    panel.volume_ml: [250, 500, 750]
+
+mesh_independence:                # Sec. 3.5 (Fig. 7)
+  vary:
+    mesh.preset: [coarse, medium, fine]
+
+smoke:                            # 10-minute plumbing test, not physics
+  vary:
+    panel.shape: [pyramid]
+  override:
+    mesh.preset: smoke
+    run.end_time_min: 2
+    run.write_interval_min: 1
+    run.n_procs: 4

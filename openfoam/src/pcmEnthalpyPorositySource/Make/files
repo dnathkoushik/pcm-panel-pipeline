@@ -1,0 +1,3 @@
+pcmEnthalpyPorositySource.C
+
+LIB = $(FOAM_USER_LIBBIN)/libpcmEnthalpyPorosity

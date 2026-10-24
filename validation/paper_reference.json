@@ -1,0 +1,19 @@
+{
+  "_source": "Yang et al., Energy & Buildings 285 (2023) 112898; numbers quoted in the text (250 mL, 1 mm shell, dT = 20 K unless noted)",
+  "melting_time_min": {
+    "pyramid":     {"t80": 219, "t100": 292},
+    "tetrahedron": {"t80": 245, "t100": 353}
+  },
+  "average_melting_rate_g_min": {"pyramid": 0.582, "tetrahedron": 0.482},
+  "average_rate_per_area_g_min_cm2": {"pyramid": 0.00251, "tetrahedron": 0.00171},
+  "rate_increase_vs_tetra_pct_by_dT": {"15": 32.2, "20": 21.0, "25": 11.0, "30": 3.91},
+  "rate_slope_g_min_K": {"pyramid": 0.0357, "tetrahedron": 0.0397},
+  "rate_increase_vs_tetra_pct_by_shell_mm": {"1": 20.9, "3": 20.1, "5": 18.3},
+  "normalised_rate_g_min_L": {
+    "pyramid":     {"250": 2.327, "500": 0.786, "750": 0.421},
+    "tetrahedron": {"250": 1.924, "500": 0.699, "750": 0.298}
+  },
+  "tetrahedron_750mL_t100_min": 760,
+  "validation_relative_error": {"overall": "9-10 %", "latent_stage": "2.88 %"},
+  "_note_normalised_rate": "Fig. 18 values equal 170 g / t100 / V for every volume (250 mL PCM mass used throughout)"
+}

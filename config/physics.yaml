@@ -1,0 +1,87 @@
+# =============================================================================
+# Physics specification -- ground truth: Yang et al., Energy & Buildings 285
+# (2023) 112898, Sections 2.2, 2.3 (Table 3) and 3.
+#
+# Every value is tagged:
+#   [PAPER]       taken verbatim from the paper (equation / table cited)
+#   [ASSUMPTION]  the paper is silent; value chosen here, change if you have data
+#   [INTERPRET]   the paper is ambiguous / internally inconsistent; see README
+# =============================================================================
+
+pcm:                               # capric:lauric (~70:30 mol) + 0.1 mol oleic acid
+  T_pc: 286.0                      # [PAPER] Table 2, phase change temperature [K]
+  T_solidus: 286.0                 # [INTERPRET] = T_pc (onset knee of CFD curves, Fig. 8)
+  T_liquidus: 293.0                # [INTERPRET] end of the latent plateau in Fig. 8 (~20 C)
+  latent_heat: 115000.0            # [PAPER] Table 2 [J/kg]
+  rho: 840.0                       # [PAPER] Table 2, used as Boussinesq rho0 [kg/m3]
+  k_liquid: 0.169                  # [PAPER] Table 2 [W/m/K]
+  k_solid: 0.183                   # [PAPER] Table 2 [W/m/K]
+  cp_liquid: 2210.0                # [PAPER] Table 2 [J/kg/K]
+  cp_solid: 1830.0                 # [PAPER] Table 2 [J/kg/K]
+  mu: 0.008                        # [ASSUMPTION] liquid dynamic viscosity [Pa s]
+  beta: 8.5e-4                     # [ASSUMPTION] thermal expansion coefficient [1/K]
+  T_ref: 286.0                     # [ASSUMPTION] Boussinesq reference, Eq. 16 [K]
+  molWeight: 192.0                 # [ASSUMPTION] mixture molar mass (unused by Boussinesq EoS)
+  # Mushy zone momentum sink, Eq. 21:  S = -(1-g)^2/(g^3+eps) * A_mush * u
+  A_mush: 1.0e+6                   # [PAPER] Sec. 3.3.2 [kg/m3/s]
+  eps_mush: 0.001                  # [PAPER] Sec. 3.3.2
+  flow: laminar                    # [PAPER] Sec. 3.3.2 (Eqs. 13-15)
+
+shell:                             # ABS, 3D-printed
+  rho: 1070.0                      # [PAPER] Table 3 [kg/m3]
+  k: 0.163                         # [PAPER] Table 3 [W/m/K]
+  cp: 1990.0                       # [PAPER] Table 3 [J/kg/K]
+  molWeight: 50.0                  # [ASSUMPTION] irrelevant for rhoConst
+
+air:                               # Fluent default air (the paper used Fluent 2020 R2)
+  rho: 1.225                       # [ASSUMPTION] Boussinesq rho0 [kg/m3]
+  mu: 1.7894e-5                    # [ASSUMPTION] [Pa s]
+  cp: 1006.43                      # [ASSUMPTION] [J/kg/K]
+  k: 0.0242                        # [ASSUMPTION] [W/m/K]
+  beta: auto                       # [ASSUMPTION] auto => 1/T_ref (ideal gas at T_ref)
+  molWeight: 28.96
+  flow: turbulent                  # [PAPER] Sec. 3.3.1
+  turbulence:
+    model: realizableKE            # [PAPER] Realizable k-epsilon, Eqs. 7-11
+    C2: 1.9                        # [PAPER] Eq. 11
+    sigmak: 1.0                    # [PAPER] Eq. 11
+    sigmaEps: 1.2                  # [INTERPRET] Eq. 8 prints sigma_k; 1.2 is the
+                                   #   Fluent/standard value. Set 1.0 for a literal reading.
+    A0: 4.0                        # [ASSUMPTION] standard realizable constant (Fluent default)
+    Prt: 0.85                      # [ASSUMPTION] sigma_h,t in Eq. 4 (Fluent default)
+    buoyancy_production: false     # [PAPER] Eqs. 7-8 contain no G_b term
+  wall_functions:                  # [PAPER] Eq. 23, standard wall functions
+    Cmu: 0.09
+    kappa: 0.4187
+    E: 9.793                       # [ASSUMPTION] Fluent default log-law constant
+
+initial_conditions:                # [PAPER] Eqs. 25-27
+  T_pcm: 278.15                    # [K]
+  T_shell: 278.15                  # [K]
+  T_air: 298.15                    # [K]  (studies override via delta_T)
+  k_air: 0.3                       # [m2/s2]
+  epsilon_air: 0.5                 # [m2/s3]
+  p: 1.0e+5                        # [Pa]
+
+gravity: [0.0, 0.0, -9.81]         # panel hangs from the ceiling at z = 0
+
+room:                              # [PAPER] Sec. 2.4 test room, panel at ceiling centre
+  Lx: 3.51
+  Ly: 3.16
+  Lz: 2.25
+
+solver:
+  algorithm: PIMPLE                # SIMPLE in the paper (Fluent); PIMPLE in OpenFOAM
+  deltaT: 0.5                      # [PAPER] Sec. 3.5 [s]
+  maxDeltaT: 0.5                   # never exceed the paper's step
+  adjustTimeStep: true             # Courant/diffusion limited below 0.5 s if needed
+  maxCo: 4.0                       # [ASSUMPTION] PIMPLE with outer correctors
+  maxDi: 10.0                      # [ASSUMPTION] solid diffusion number limit
+  nOuterCorrectors: 2              # [ASSUMPTION] 2 reproduces the converged enthalpy
+                                   #   method exactly (tests/test_latent_source_1d.py)
+  nCorrectors: 2
+  nNonOrthogonalCorrectors: 1
+  residuals:                       # [PAPER] Sec. 3.4 (absolute linear-solver tolerances)
+    energy: 1.0e-6
+    others: 1.0e-3                 # U, p_rgh, k, epsilon
+  div_scheme: linearUpwind         # [PAPER] second-order upwind

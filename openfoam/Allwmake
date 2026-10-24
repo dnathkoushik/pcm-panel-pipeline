@@ -1,0 +1,6 @@
+#!/bin/sh
+# Builds libpcmEnthalpyPorosity.so into $FOAM_USER_LIBBIN.
+# Requires a sourced OpenFOAM (openfoam.com) v2306+ environment.
+cd "${0%/*}" || exit 1
+[ -n "$WM_PROJECT_DIR" ] || { echo "Source OpenFOAM's etc/bashrc first"; exit 1; }
+wmake libso src/pcmEnthalpyPorositySource
