@@ -210,7 +210,7 @@ startFrom       latestTime;
 startTime       0;
 stopAt          endTime;
 endTime         {num(end_s)};
-deltaT          {num(sv['deltaT'])};
+deltaT          {num(sv.get('deltaT_initial', sv['deltaT']) if sv['adjustTimeStep'] else sv['deltaT'])};
 
 writeControl    adjustableRunTime;
 writeInterval   {num(60 * run['write_interval_min'])};

@@ -72,7 +72,9 @@ room:                              # [PAPER] Sec. 2.4 test room, panel at ceilin
 
 solver:
   algorithm: PIMPLE                # SIMPLE in the paper (Fluent); PIMPLE in OpenFOAM
-  deltaT: 0.5                      # [PAPER] Sec. 3.5 [s]
+  deltaT: 0.5                      # [PAPER] Sec. 3.5 [s] -- target step, used as maxDeltaT
+  deltaT_initial: 0.001            # first step only; adjustTimeStep grows it to deltaT.
+                                   #   Starting at 0.5 s blows up the air region (CI run)
   maxDeltaT: 0.5                   # never exceed the paper's step
   adjustTimeStep: true             # Courant/diffusion limited below 0.5 s if needed
   maxCo: 4.0                       # [ASSUMPTION] PIMPLE with outer correctors

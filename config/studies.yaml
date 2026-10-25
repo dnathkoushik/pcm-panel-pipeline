@@ -41,12 +41,12 @@ mesh_independence:                # Sec. 3.5 (Fig. 7)
   vary:
     mesh.preset: [coarse, medium, fine]
 
-smoke:                            # 10-minute plumbing test, not physics
+smoke:                            # plumbing test (30 s of flow time), not physics
   vary:
     panel.shape: [pyramid]
   override:
     mesh.preset: smoke
-    run.end_time_min: 2
-    run.write_interval_min: 1
+    run.end_time_min: 0.5
+    run.write_interval_min: 0.25
     run.n_procs: 4
-    post.contour_times_min: [1, 2]
+    post.contour_times_min: [0.25, 0.5]
