@@ -275,6 +275,42 @@ functions
         writeFields     false;
     }}
 
+    pcmTMinMax         // where are the extreme temperatures? (boundedness check)
+    {{
+        type            fieldMinMax;
+        libs            (fieldFunctionObjects);
+        region          pcm;
+        fields          (T U);
+        mode            magnitude;
+        location        true;
+        writeControl    timeStep;
+        writeInterval   5;
+    }}
+
+    shellTMinMax
+    {{
+        type            fieldMinMax;
+        libs            (fieldFunctionObjects);
+        region          shell;
+        fields          (T);
+        mode            magnitude;
+        location        true;
+        writeControl    timeStep;
+        writeInterval   5;
+    }}
+
+    airTMinMax
+    {{
+        type            fieldMinMax;
+        libs            (fieldFunctionObjects);
+        region          air;
+        fields          (T U);
+        mode            magnitude;
+        location        true;
+        writeControl    timeStep;
+        writeInterval   5;
+    }}
+
     airResiduals
     {{
         type            solverInfo;

@@ -60,6 +60,7 @@ jobs:
             runs/**/cad/cad_report.json
             runs/**/cad/*.stl
             runs/**/metrics.json
+            runs/**/postProcessing/**/*.dat
             runs/**/post/*.png
             runs/_figures/**
             .docker-home/log.wmake
