@@ -196,6 +196,39 @@ python3 -m pcmpipe all --study validation --np 8 --np-mesh 8
 Run `setup` after `mesh`, because `mesh` recreates the case folder. Use `--dry-run` to
 write the dictionaries and print the commands without running OpenFOAM.
 
+### Two modes: screening and paper
+
+The 1 mm ABS shell needs ~0.5 mm cells to resolve. Those cells cap the time step at
+about 0.015 s (Courant limit), against the paper's 0.5 s. In the CI smoke run that meant
+about 14 s per step on 2 cores, so a full 5-hour melt in paper mode takes weeks on a
+laptop. Every study can therefore run in one of two modes (`--mode`, or `MODE=` with make):
+
+| | `--mode screening` | `--mode paper` (default) |
+|---|---|---|
+| Purpose | rank many designs | confirm the best 2–3 designs, validate against the paper |
+| ABS shell | thin thermal resistance t/k in the air–PCM coupling (`thicknessLayers`, `kappaLayers`); no shell cells | solid region, Eq. 12 |
+| PCM | fills the cavity up to the (adiabatic) ceiling: cavity + footprint × t | the cavity |
+| Mesh preset | `screen`: 1 mm surface cells | `medium` |
+| Results folder | `runs/<case>_screen/`, figures in `runs/_figures/<study>_screening/` | `runs/<case>/`, `runs/_figures/<study>/` |
+
+The shell's heat capacity (about 0.4 % of the PCM's latent heat) is the only physics
+screening mode drops. Its geometry approximation (PCM up to the ceiling, about 5 % more
+PCM for 1 mm) is reported in `metrics.json` through the actual PCM mass. Rank designs on
+screening results, then re-run the shortlist in paper mode:
+
+```bash
+make study STUDY=shapes MODE=screening NP=8      # or: python3 -m pcmpipe all --study shapes --mode screening
+make study STUDY=volume MODE=screening NP=8
+make study STUDY=validation NP=8                 # paper mode: compare with the paper's 292 / 353 min
+```
+
+### Presentation figures (no CFD needed)
+
+`python3 post/presentation_figures.py` writes to `runs/_figures/presentation/`:
+- `design_catalogue.png`: 3D views of the candidate panels
+- `geometry_validation.png` and `.md`: our geometry against the paper's Table 3 and Sec. 4.5/4.7 numbers
+- `latent_heat_verification.png`: the OpenFOAM phase-change source term against a converged enthalpy solution
+
 ### Studies
 
 | Study | Varies | Paper | Main figure |
@@ -292,32 +325,39 @@ The paper does not give these values. Each one is a single line to change.
 | PCM mass | ρ × CAD cavity volume (≈ 182 g for the 250 mL pyramid) | the paper states 170 g, which is not consistent with 250 mL, a 1 mm shell and ρ = 840 kg/m³. Rates use the actual mass |
 | Residuals | p_rgh linear tolerance 1e-6, tighter than the paper's 1e-3 | Fluent's scaled continuity residual is not OpenFOAM's p_rgh residual. A loose p_rgh breaks mass conservation in a closed room |
 
-## 6. Limitations and what was not verified
+## 6. Status, known issues and limitations
 
-- **None of the OpenFOAM, FreeCAD or ParaView steps have been executed yet.** The machine
-  where this was written had no OpenFOAM, FreeCAD or ParaView. What was tested:
-  - the geometry solver (`tests/test_geometry.py`, against the paper's numbers)
-  - the latent-heat discretisation (`tests/test_latent_source_1d.py`)
-  - dictionary generation for all 39 cases (`--dry-run` / `setup`)
-  - results parsing and every plot, on synthetic data
+**Verified** (CI on every push, plus local tests):
+- Python side on Linux, macOS and Windows (Python 3.10/3.12): geometry against the paper's
+  numbers, the latent-heat scheme against a converged enthalpy solution, case generation for
+  every study, and results/plots on synthetic solver output.
+- Docker image (OpenFOAM v2406, FreeCAD 0.21, ParaView 5.11).
+- The `pcmEnthalpyPorositySource` fvOption compiles against OpenFOAM v2406.
+- FreeCAD builds valid, watertight panels. For the 250 mL pyramid the cavity is 217.2 mL,
+  giving 182.4 g of PCM.
+- snappyHexMesh produces the three regions with conformal interfaces (smoke preset: air 447k,
+  shell 266k, PCM 514k cells); `refineWallLayer` and `checkMesh` pass.
+- `chtMultiRegionFoam` runs stably with the fvOption active: 182 steps to t = 0.6 s in CI,
+  about 9.5 s per step on 2 cores at 1.2 M cells.
 
-  Expect to fix small version-specific issues on the first `smoke` run. Most likely:
-  1. **Compiling the fvOption** (`openfoam/Allwmake`). Written against the openfoam.com
-     v2306+ `fv::cellSetOption` API. Check `wmake` output first.
-  2. **Multi-region snappyHexMesh.** Zones come from `locationsInMesh` (the surfaces carry no faceZone; snappy creates them). If
-     `splitMeshRegions` does not produce exactly `air`, `shell`, `pcm`, open the snappy
-     log and `checkMesh` output. Raise `shell_cells_across` if the 1 mm shell
-     breaks up.
-  3. **`refineWallLayer`** (the inflation layers) skips cells it cannot cut and reports them
-     in `log.<region>.refineWallLayer.*`. Set `wall_layer_passes` to 0 to disable it.
+**Known issues** (open):
+1. **Temperature undershoot in the PCM (paper mode).** One interior PCM cell drifts below
+   the initial temperature: −0.13 K at 0.6 s, −12 K at 3.5 s. The phase-change source
+   reduces exactly to the correct heat capacity in solid PCM, so the suspect is a distorted
+   cell at a refinement transition (checkMesh reports 4 highly skewed PCM faces). The
+   `pcmTMinMax` monitor prints the location
+   (`postProcessing/pcm/pcmTMinMax/0/fieldMinMax.dat`). **Do not trust paper-mode results
+   until this is resolved.**
+2. **Cost of paper mode.** The 0.5 mm shell cells cap the time step at about 0.015 s, against
+   the paper's 0.5 s. Use screening mode for design studies (section 3).
+3. The medium/fine presets are larger than the paper's 1.1 M cells, because the smoke preset
+   alone is already 1.2 M. Check `log.checkMesh.*` and tune `config/base_case.yaml`.
+
+**Limitations:**
 - Inflation layers are made by splitting the wall-adjacent cells (`refineWallLayer`) after
-  `splitMeshRegions`. This keeps the shell/fluid interfaces conformal. snappyHexMesh's own
-  layer addition does not reliably apply to internal faceZones between regions.
-- Compute cost: at the medium preset, a 250 mL case is ~1.1 M cells and up to 48 000 time
-  steps at Δt = 0.5 s. Expect roughly one to two days on 8 cores per case. The full study
-  set is ~39 unique cases; run `validation` first and compare with
-  `validation/paper_reference.json`.
+  `splitMeshRegions`. This keeps the region interfaces conformal.
+- The solver uses PIMPLE with 2 outer correctors, which is fine for the latent heat
+  (see the verification test). `residualControl` is not used because its syntax differs
+  between releases; `solverInfo` logs the residuals.
 - The paper's hanging-distance study (Sec. 4.4) is not included.
-- `residualControl` for chtMultiRegionFoam outer loops is not used, because its syntax
-  differs between releases. Convergence comes from 2 outer correctors plus the tolerances
-  above. `solverInfo` logs the residuals for checking.
+- Native macOS (OpenFOAM.app, Apple Clang) is not covered by CI; Docker is.

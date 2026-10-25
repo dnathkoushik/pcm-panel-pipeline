@@ -50,3 +50,4 @@ smoke:                            # plumbing test (0.6 s of flow, ~60 steps), no
     run.write_interval_min: 0.005
     run.n_procs: 4
     post.contour_times_min: [0.005, 0.01]
+    run.sample_interval_s: 0.05
