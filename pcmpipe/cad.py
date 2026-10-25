@@ -6,7 +6,7 @@ import os
 import shutil
 import subprocess
 
-from . import config, geometry
+from . import config, foam, geometry
 
 CAD_SCRIPT = os.path.join(config.ROOT, "cad", "build_panel_freecad.py")
 
@@ -32,15 +32,16 @@ def write_cad_input(case: dict) -> str:
 def build(case: dict, dry: bool = False):
     path = write_cad_input(case)
     cad_dir = os.path.dirname(path)
-    exe = case["tools"]["freecadcmd"]
-    print(f"  [cad] {exe} {CAD_SCRIPT}")
+    exe = foam.tool(case, "freecadcmd")
+    print(f"  [cad] {' '.join(exe)} {CAD_SCRIPT}")
     if dry:
         return
-    if shutil.which(exe) is None:
-        raise RuntimeError(f"FreeCAD command '{exe}' not found (tools.freecadcmd in base_case.yaml)")
+    if shutil.which(exe[0]) is None:
+        raise RuntimeError(f"FreeCAD command '{exe[0]}' not found: install FreeCAD or set "
+                           "PCMPIPE_FREECADCMD / tools.freecadcmd in config/base_case.yaml")
     env = dict(os.environ, PCM_PANEL_JSON=path)
     with open(os.path.join(cad_dir, "log.freecad"), "w") as log:
-        r = subprocess.run([exe, CAD_SCRIPT], env=env, stdout=log, stderr=subprocess.STDOUT)
+        r = subprocess.run([*exe, CAD_SCRIPT], env=env, stdout=log, stderr=subprocess.STDOUT)
     report = os.path.join(cad_dir, "cad_report.json")
     if r.returncode != 0 or not os.path.exists(report):
         raise RuntimeError(f"FreeCAD build failed, see {cad_dir}/log.freecad")

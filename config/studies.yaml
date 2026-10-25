@@ -49,3 +49,4 @@ smoke:                            # 10-minute plumbing test, not physics
     run.end_time_min: 2
     run.write_interval_min: 1
     run.n_procs: 4
+    post.contour_times_min: [1, 2]

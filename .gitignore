@@ -1,3 +1,8 @@
 runs/
+.docker-home/
+.venv/
 __pycache__/
 *.pyc
+# wmake build products
+openfoam/src/*/lnInclude/
+openfoam/src/*/Make/*/

@@ -11,16 +11,16 @@ import subprocess
 import sys
 import traceback
 
-from . import cad, case_setup, config, mesh, results, run
+from . import cad, case_setup, config, foam, mesh, results, run
 
 POST_DIR = os.path.join(config.ROOT, "post")
 
 
 def pv_post(case: dict, dry: bool):
-    exe = case["tools"]["pvpython"]
+    exe = foam.tool(case, "pvpython")
     times = [str(t) for t in case["post"]["contour_times_min"]]
     for script, extra in (("pv_contours.py", ["--times", *times]), ("pv_extract_transient.py", [])):
-        cmd = [exe, os.path.join(POST_DIR, script), case["dir"], *extra]
+        cmd = [*exe, os.path.join(POST_DIR, script), case["dir"], *extra]
         print("  " + " ".join(cmd))
         if not dry:
             subprocess.run(cmd, check=True)

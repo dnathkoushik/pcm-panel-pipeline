@@ -1,5 +1,7 @@
 # PCM ceiling panel CFD pipeline
 
+[![CI](https://github.com/dnathkoushik/pcm-panel-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/dnathkoushik/pcm-panel-pipeline/actions/workflows/ci.yml)
+
 This is an automated, open-source pipeline to design, mesh, simulate and evaluate
 phase change material (PCM) ceiling panels. All physics follows
 **Yang et al., "PCM-based ceiling panels for passive cooling in buildings: A CFD
@@ -51,10 +53,16 @@ pcm_panel_pipeline/
 ├── validation/paper_reference.json   # numbers quoted in the paper, overlaid on plots
 ├── tests/
 │   ├── test_geometry.py      # geometry solver vs. the paper's Table 3, Sec. 4.5, Sec. 4.7
-│   └── test_latent_source_1d.py  # latent-heat formulation vs. converged enthalpy method
+│   ├── test_latent_source_1d.py  # latent-heat formulation vs. converged enthalpy method
+│   └── test_pipeline_offline.py  # every study: dictionaries, results, plots (no OpenFOAM)
 ├── scripts/
-│   ├── install_wsl_ubuntu.sh
+│   ├── docker_run.sh         # run anything inside the container (Linux/macOS/Windows)
+│   ├── install_ubuntu.sh     # native Ubuntu/Debian/WSL2
+│   ├── install_macos.sh      # native macOS (Homebrew, OpenFOAM.app)
 │   └── run_all_studies.sh
+├── Dockerfile, docker/entrypoint.sh   # OpenFOAM + FreeCAD + ParaView image
+├── Makefile                  # make test | smoke | study | docker-*
+├── .github/workflows/ci.yml  # tests on Linux/macOS/Windows + Docker smoke run
 └── runs/                     # created at run time: one folder per case + _figures/
 ```
 
@@ -68,47 +76,105 @@ Case ids encode the parameters, for example `pyr_V250_r50_t1_g0_dT20`: pyramid, 
 50 % protrusion ratio, 1 mm shell, no gap, ΔT = 20 K. Identical cases shared by
 several studies are only run once.
 
-## 1. Installation (Windows 11 → WSL2)
+## 1. Installation
 
-OpenFOAM runs on Linux. On Windows, use WSL2 with Ubuntu 24.04.
+Clone the repository to a path **without spaces**; OpenFOAM and `wmake` cannot handle them.
 
-1. In an **administrator PowerShell**, install WSL and reboot when asked:
-   ```powershell
-   wsl --install -d Ubuntu-24.04
-   ```
-2. Open the Ubuntu terminal. **Copy the project into the Linux home folder.**
-   Running OpenFOAM on `/mnt/c` is very slow, and `wmake` breaks on the space in `BTP 1st`.
-   ```bash
-   cp -r "/mnt/c/Users/ok/Desktop/BTP 1st/pcm_panel_pipeline" ~/
-   cd ~/pcm_panel_pipeline
-   ```
-3. Install OpenFOAM v2406 (openfoam.com), FreeCAD, ParaView and the Python packages,
-   and compile the fvOption library:
-   ```bash
-   bash scripts/install_wsl_ubuntu.sh
-   source ~/.bashrc
-   ```
-   This prints the paths of `chtMultiRegionFoam`, `snappyHexMesh`, `freecadcmd`, `pvpython`
-   and `libpcmEnthalpyPorosity.so`. Use OpenFOAM **v2306 or newer from openfoam.com** (ESI).
-   The Foundation releases (openfoam.org) use a different fvModels API and will not compile
-   the library.
+```bash
+git clone https://github.com/dnathkoushik/pcm-panel-pipeline.git
+cd pcm-panel-pipeline
+```
 
-   If FreeCAD or ParaView are installed elsewhere (for example an AppImage), set
-   `tools.freecadcmd` and `tools.pvpython` in `config/base_case.yaml`.
+Choose one of the three setups:
+
+| | Linux | macOS | Windows |
+|---|---|---|---|
+| **A. Docker** (recommended, same environment as CI) | ✓ | ✓ Intel and Apple silicon | ✓ via WSL2 |
+| **B. Native** | Ubuntu 22.04/24.04, Debian 12 | Homebrew + OpenFOAM.app | WSL2 Ubuntu |
+
+You need Python 3.10+ with `numpy`, `matplotlib` and `pyyaml`. OpenFOAM must be
+**v2306 or newer from openfoam.com** (ESI). The Foundation releases (openfoam.org) use a
+different fvOption API and will not compile the library.
+
+### A. Docker (any OS)
+
+Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS/Windows)
+or Docker Engine (Linux), then:
+
+```bash
+make docker-build      # ~10-15 min once: OpenFOAM v2406, FreeCAD, ParaView, Python
+make docker-test       # Python tests inside the container
+make docker-smoke      # real run: CAD -> mesh -> chtMultiRegionFoam -> pvpython -> plots
+scripts/docker_run.sh  # interactive shell; the repo is mounted at /work
+```
+
+Any pipeline command can be run as `scripts/docker_run.sh python3 -m pcmpipe ...`.
+Results land in `runs/` on your machine.
+- **Apple silicon:** the image is amd64 and runs under emulation, so it is several times
+  slower than native. Give Docker at least 8 GB of memory (Settings → Resources).
+- **Windows:** run the commands from a WSL2 terminal.
+- **Without make:** use `docker build --platform linux/amd64 -t pcm-panel-pipeline .` and
+  `scripts/docker_run.sh make smoke`.
+
+### B1. Native Linux (Ubuntu / Debian / WSL2)
+
+```bash
+bash scripts/install_ubuntu.sh   # OpenFOAM v2406 (apt repo), FreeCAD, ParaView, Python, compiles the fvOption
+source ~/.bashrc
+make test && make smoke
+```
+
+On a headless server, ParaView needs a virtual display:
+`export PCMPIPE_PVPYTHON="xvfb-run -a pvpython"`.
+
+On Windows, first run `wsl --install -d Ubuntu-24.04` in an administrator PowerShell,
+then clone *inside* the Linux home folder. `/mnt/c` is very slow for OpenFOAM.
+
+### B2. Native macOS
+
+```bash
+bash scripts/install_macos.sh    # brew: gerlero/openfoam/openfoam, FreeCAD, ParaView; Python venv
+openfoam                         # shell with the OpenFOAM environment
+source .venv/bin/activate
+make lib test smoke
+```
+
+[OpenFOAM.app](https://github.com/gerlero/openfoam-app) provides native openfoam.com
+builds: the latest version on Apple silicon, up to v2506 on Intel Macs. It compiles with
+Apple Clang. If `make lib` fails on macOS, use Docker. This route is not covered by CI.
+
+### Tool locations
+
+FreeCAD, ParaView and MPI are looked up in this order:
+1. the environment variables `PCMPIPE_FREECADCMD`, `PCMPIPE_PVPYTHON` and `PCMPIPE_MPIRUN`
+2. `tools:` in `config/base_case.yaml`
+3. `PATH`
+4. `/Applications/*.app` on macOS
+
+Values may include arguments, e.g. `PCMPIPE_MPIRUN="mpirun --oversubscribe"`.
+`PCMPIPE_RUNS_DIR` moves the output folder.
 
 ## 2. Verify the installation
 
 ```bash
-python3 tests/test_geometry.py          # geometry vs. paper Table 3 / Sec. 4.5 / Sec. 4.7
-python3 tests/test_latent_source_1d.py  # latent-heat scheme vs. converged enthalpy method (~30 s)
-python3 -m pcmpipe list                 # all studies and their cases
-python3 -m pcmpipe all --study smoke --np 4   # CAD, smoke mesh (1 cell across the shell), 2 simulated minutes
+make test        # = python3 -m unittest discover -s tests -v   (~40 s, no OpenFOAM needed)
+make smoke NP=4  # CAD, smoke mesh (1 cell across the shell), 2 simulated minutes, post, plots
 ```
 
-The smoke test only checks the plumbing. Inspect it before launching long runs:
+`make test` covers:
+- the geometry against the paper's numbers
+- the latent-heat discretisation against a converged enthalpy solution
+- writing all 39 cases, then running `results` and every plot on synthetic solver output
+
+The smoke run checks the OpenFOAM plumbing; it is not physics. Inspect it before launching
+long runs:
 - `runs/pyr_V250_r50_t1_g0_dT20_smoke/case/log.*`: every application should end with `End`.
 - `log.checkMesh.{air,shell,pcm}` should show three regions.
 - The `chtMultiRegionFoam` log should print `pcmEnthalpyPorositySource: ... initial liquid fraction 0`.
+
+Every push runs the same checks on GitHub Actions (`.github/workflows/ci.yml`). The logs,
+STLs, contour images and figures of the CI smoke run can be downloaded as the
+`smoke-results` artifact.
 
 ## 3. Running the pipeline step by step
 

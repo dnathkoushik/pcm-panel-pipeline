@@ -10,7 +10,7 @@ import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_DIR = os.path.join(ROOT, "config")
-RUNS_DIR = os.path.join(ROOT, "runs")
+RUNS_DIR = os.environ.get("PCMPIPE_RUNS_DIR") or os.path.join(ROOT, "runs")
 
 
 def _load(name):

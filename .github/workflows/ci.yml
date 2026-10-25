@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-tests:
+    name: Python tests (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+
+  openfoam-smoke:
+    name: OpenFOAM smoke run (Docker)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image (OpenFOAM + FreeCAD + ParaView)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          tags: pcm-panel-pipeline:latest
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Python tests in the container
+        run: scripts/docker_run.sh make test
+      - name: Compile the PCM fvOption
+        run: scripts/docker_run.sh make lib
+      - name: Smoke run (CAD, mesh, chtMultiRegionFoam, pvpython, plots)
+        run: scripts/docker_run.sh make smoke NP=2
+      - name: Upload logs and figures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-results
+          if-no-files-found: warn
+          path: |
+            runs/**/log.*
+            runs/**/cad/cad_report.json
+            runs/**/cad/*.stl
+            runs/**/metrics.json
+            runs/**/post/*.png
+            runs/_figures/**
+            .docker-home/log.wmake
+            openfoam/src/**/lnInclude/*.dep

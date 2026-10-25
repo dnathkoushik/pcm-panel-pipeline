@@ -1,0 +1,4 @@
+runs/
+.docker-home/
+.git/
+**/__pycache__/

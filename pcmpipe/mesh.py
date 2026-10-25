@@ -265,7 +265,7 @@ def build(case: dict, n_procs: int = 1, dry: bool = False) -> dict:
     foam.run(["surfaceFeatureExtract"], cdir, dry=dry)
     if n_procs > 1:
         foam.run(["decomposePar", "-force"], cdir, log="decomposePar.mesh", dry=dry)
-        foam.run([case["tools"]["mpirun"], "-np", str(n_procs), "snappyHexMesh",
+        foam.run([*foam.tool(case, "mpirun"), "-np", str(n_procs), "snappyHexMesh",
                   "-parallel", "-overwrite"], cdir, log="snappyHexMesh", dry=dry)
         foam.run(["reconstructParMesh", "-constant"], cdir, dry=dry)
         if not dry:

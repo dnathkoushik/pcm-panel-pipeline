@@ -24,7 +24,7 @@ def run_case(case: dict, n_procs: int | None = None, dry: bool = False):
         build_library()
     if n > 1:
         foam.run(["decomposePar", "-allRegions", "-force"], cdir, dry=dry)
-        foam.run([case["tools"]["mpirun"], "-np", str(n), "chtMultiRegionFoam", "-parallel"],
+        foam.run([*foam.tool(case, "mpirun"), "-np", str(n), "chtMultiRegionFoam", "-parallel"],
                  cdir, dry=dry)
         foam.run(["reconstructPar", "-allRegions", "-newTimes"], cdir, dry=dry)
         if not dry:

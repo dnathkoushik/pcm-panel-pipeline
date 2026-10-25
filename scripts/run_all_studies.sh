@@ -1,10 +1,11 @@
 #!/bin/bash
 # Runs every study end to end. Expect days of CPU time at the medium mesh;
 # start with `smoke` and `validation`. Usage: scripts/run_all_studies.sh [NPROCS]
+# Needs a loaded OpenFOAM environment (or run it through scripts/docker_run.sh).
 set -euo pipefail
 NP=${1:-8}
 cd "$(dirname "$0")/.."
-[ -n "${WM_PROJECT_DIR:-}" ] || source /usr/lib/openfoam/openfoam2406/etc/bashrc
+[ -n "${WM_PROJECT_DIR:-}" ] || { echo "Load OpenFOAM first (source .../etc/bashrc, or 'openfoam' on macOS)"; exit 1; }
 for study in smoke validation shapes delta_T shell_thickness protrusion_ratio gap volume; do
     echo "################ $study"
     python3 -m pcmpipe all --study "$study" --np "$NP" --np-mesh "$NP" --keep-going
