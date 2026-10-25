@@ -6,7 +6,6 @@ import os
 from . import foam
 from .foam import num
 
-ROOM_WALLS = '"(floor|ceiling|walls)"'
 
 
 def _field(path, cls, dims, internal, boundary):
@@ -41,13 +40,14 @@ def write_fields(case: dict, cdir: str):
     # ------------------------------------------------------------------ air
     d = os.path.join(zero_dir, "air")
     Ta = ic["T_air"]
+    # ".*" comes first: later regexes and exact names override it. It catches the
+    # few stray faces snappy can leave on the panel_outer / pcm_cavity patches.
     _field(os.path.join(d, "T"), "volScalarField", "[0 0 0 1 0 0 0]", f"uniform {num(Ta)}", [
-        (ROOM_WALLS, "type zeroGradient;"),               # adiabatic room walls
+        (".*", "type zeroGradient;"),                     # adiabatic room walls
         ("air_to_shell", _coupled(Ta, "fluidThermo")),
     ])
     _field(os.path.join(d, "U"), "volVectorField", "[0 1 -1 0 0 0 0]", "uniform (0 0 0)", [
-        (ROOM_WALLS, "type noSlip;"),
-        ("air_to_shell", "type noSlip;"),
+        (".*", "type noSlip;"),
     ])
     _field(os.path.join(d, "p"), "volScalarField", "[1 -1 -2 0 0 0 0]", f"uniform {p0}", [
         (".*", f"type calculated; value uniform {p0};"),
@@ -75,6 +75,7 @@ def write_fields(case: dict, cdir: str):
     d = os.path.join(zero_dir, "pcm")
     Tp = ic["T_pcm"]
     _field(os.path.join(d, "T"), "volScalarField", "[0 0 0 1 0 0 0]", f"uniform {num(Tp)}", [
+        (".*", "type zeroGradient;"),
         ("pcm_to_shell", _coupled(Tp, "fluidThermo")),
     ])
     _field(os.path.join(d, "U"), "volVectorField", "[0 1 -1 0 0 0 0]", "uniform (0 0 0)", [
@@ -91,7 +92,7 @@ def write_fields(case: dict, cdir: str):
     d = os.path.join(zero_dir, "shell")
     Ts = ic["T_shell"]
     _field(os.path.join(d, "T"), "volScalarField", "[0 0 0 1 0 0 0]", f"uniform {num(Ts)}", [
-        ("ceiling", "type zeroGradient;"),                # adiabatic panel base, assumption (3)
+        (".*", "type zeroGradient;"),                     # incl. ceiling: adiabatic panel base
         ("shell_to_air", _coupled(Ts, "solidThermo")),
         ("shell_to_pcm", _coupled(Ts, "solidThermo")),   # Eq. 24 flux continuity
     ])
