@@ -12,6 +12,8 @@ ROOM_WALLS = '"(floor|ceiling|walls)"'
 def _field(path, cls, dims, internal, boundary):
     body = f"dimensions      {dims};\n\ninternalField   {internal};\n\nboundaryField\n{{\n"
     for patch, bc in boundary:
+        if any(c in patch for c in ".*|()[]") and not patch.startswith('"'):
+            patch = f'"{patch}"'                 # regex patch names must be quoted
         body += f"    {patch}\n    {{\n"
         for line in bc.strip().splitlines():
             body += f"        {line.strip()}\n"
