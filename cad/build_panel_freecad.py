@@ -133,17 +133,25 @@ def main():
     p, out = cfg["geometry"], cfg["out_dir"]
     os.makedirs(out, exist_ok=True)
 
+    t, ext = p["shell_thickness"], cfg["ceiling_extension_mm"]
     outer_true = build(p, 0.0)
-    outer_mesh = build(p, cfg["ceiling_extension_mm"])
+    outer_mesh = build(p, ext)
     cavity = build(p, 0.0, inner=True)
     shell = outer_true.cut(cavity)
-    for name, s in (("outer", outer_true), ("cavity", cavity), ("shell", shell)):
+    # Screening mode (shell as a thin thermal resistance): the PCM reaches the
+    # ceiling, i.e. the cavity with its top raised by t (and through the ceiling
+    # for meshing). Inside the room this is cavity + footprint' x t.
+    cavity_thin = build(p, t, inner=True)
+    cavity_thin_mesh = build(p, ext + t, inner=True)
+    for name, s in (("outer", outer_true), ("cavity", cavity), ("shell", shell),
+                    ("cavity_thin", cavity_thin)):
         if not s.isValid():
             sys.exit(f"invalid {name} solid")
 
     tol = cfg["stl_tolerance_mm"]
     write_stl(outer_mesh, os.path.join(out, "panel_outer.stl"), "panel_outer", tol)
     write_stl(cavity, os.path.join(out, "pcm_cavity.stl"), "pcm_cavity", tol)
+    write_stl(cavity_thin_mesh, os.path.join(out, "pcm_cavity_thin.stl"), "pcm_cavity", tol)
     Part.Compound([shell, cavity]).exportStep(os.path.join(out, "panel.step"))
 
     top_area = abs(Part.Face(Part.makePolygon(
@@ -154,6 +162,10 @@ def main():
         "cavity_volume_ml": cavity.Volume / 1000.0,
         "shell_volume_ml": shell.Volume / 1000.0,
         "pcm_mass_g": rho_pcm * cavity.Volume * 1e-9 * 1000.0,
+        "pcm_mass_thin_g": rho_pcm * cavity_thin.Volume * 1e-9 * 1000.0,
+        "cavity_thin_area_cm2": (cavity_thin.Area - abs(Part.Face(Part.makePolygon(
+            [Vector(x, y, 0) for x, y in inset(p["footprint"], t)]
+            + [Vector(*inset(p["footprint"], t)[0], 0)])).Area)) / 100.0,
         "exposed_area_cm2": (outer_true.Area - top_area) / 100.0,
         "cavity_area_cm2": cavity.Area / 100.0,
     }

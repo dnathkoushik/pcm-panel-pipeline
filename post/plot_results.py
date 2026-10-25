@@ -39,11 +39,11 @@ plt.rcParams.update({"font.size": 11, "axes.linewidth": 1.0, "legend.frameon": F
                      "xtick.direction": "in", "ytick.direction": "in"})
 
 
-def load(study):
+def load(study, mode="paper"):
     spec = config._load("studies.yaml")[study]
     params = [k for k in spec.get("vary", {}) if k != "panel.shape"]
     rows = []
-    for c in config.expand_study(study):
+    for c in config.expand_study(study, mode):
         mpath = os.path.join(c["dir"], "metrics.json")
         if not os.path.exists(mpath):
             if os.path.exists(os.path.join(c["dir"], "case_meta.json")):
@@ -234,12 +234,14 @@ def write_table(rows, params, outdir):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--study", required=True)
+    ap.add_argument("--mode", default="paper", choices=config.mode_names())
     ap.add_argument("--rate-convention", choices=["physical", "paper", "both"], default="both")
     a = ap.parse_args()
-    params, rows = load(a.study)
+    params, rows = load(a.study, a.mode)
     if not rows:
         sys.exit(f"no finished cases with results for study '{a.study}'")
-    outdir = os.path.join(config.RUNS_DIR, "_figures", a.study)
+    outdir = os.path.join(config.RUNS_DIR, "_figures",
+                          a.study if a.mode == "paper" else f"{a.study}_{a.mode}")
     param = params[0] if params else None
     write_table(rows, params, outdir)
     fig_liquid_fraction(rows, param, outdir)

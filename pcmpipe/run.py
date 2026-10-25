@@ -5,7 +5,7 @@ import glob
 import os
 import shutil
 
-from . import case_setup, config, foam
+from . import case_setup, config, foam, mesh
 
 
 def build_library(dry: bool = False):
@@ -23,7 +23,7 @@ def run_case(case: dict, n_procs: int | None = None, dry: bool = False):
         foam.check_openfoam()
         build_library()
     if n > 1:
-        case_setup.write_decomposition(cdir, n, case["run"]["decomposition"])
+        case_setup.write_decomposition(cdir, n, case["run"]["decomposition"], mesh.regions(case))
         foam.run(["decomposePar", "-allRegions", "-force"], cdir, dry=dry)
         foam.run([*foam.tool(case, "mpirun"), "-np", str(n), "chtMultiRegionFoam", "-parallel"],
                  cdir, dry=dry)

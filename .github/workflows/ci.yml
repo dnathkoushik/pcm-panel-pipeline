@@ -47,8 +47,11 @@ jobs:
         run: scripts/docker_run.sh make test
       - name: Compile the PCM fvOption
         run: scripts/docker_run.sh make lib
-      - name: Smoke run (CAD, mesh, chtMultiRegionFoam, pvpython, plots)
-        run: scripts/docker_run.sh make smoke NP=2
+      - name: Smoke run, paper mode (resolved shell)
+        run: scripts/docker_run.sh make smoke NP=2 MODE=paper
+      - name: Smoke run, screening mode (thin shell)
+        if: success() || failure()
+        run: scripts/docker_run.sh make smoke NP=2 MODE=screening
       - name: Upload logs and figures
         if: always()
         uses: actions/upload-artifact@v4

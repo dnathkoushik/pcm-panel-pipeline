@@ -32,6 +32,8 @@ def main(argv=None):
     ap.add_argument("step", choices=["list", "cad", "mesh", "setup", "run", "results",
                                      "post", "plots", "all"])
     ap.add_argument("--study", default="validation", help="study name from config/studies.yaml")
+    ap.add_argument("--mode", default="paper", choices=config.mode_names(),
+                    help="paper: resolved shell (Sec. 3); screening: thin shell, coarse mesh")
     ap.add_argument("--case", default=None, help="only cases whose id contains this text")
     ap.add_argument("--np", type=int, default=None, help="MPI ranks (overrides run.n_procs)")
     ap.add_argument("--np-mesh", type=int, default=1, help="MPI ranks for snappyHexMesh")
@@ -42,22 +44,22 @@ def main(argv=None):
     if a.step == "list":
         for s in config.study_names():
             print(f"{s}:")
-            for c in config.expand_study(s):
+            for c in config.expand_study(s, a.mode):
                 print(f"    {c['id']}")
         return 0
 
-    cases = [c for c in config.expand_study(a.study) if not a.case or a.case in c["id"]]
+    cases = [c for c in config.expand_study(a.study, a.mode) if not a.case or a.case in c["id"]]
     if not cases:
         sys.exit("no matching cases")
 
     if a.step == "plots":
         return subprocess.call([sys.executable, os.path.join(POST_DIR, "plot_results.py"),
-                                "--study", a.study])
+                                "--study", a.study, "--mode", a.mode])
 
     steps = ["cad", "mesh", "setup", "run", "results", "post"] if a.step == "all" else [a.step]
     failed = []
     for c in cases:
-        print(f"=== {c['id']} ({a.study}) ===")
+        print(f"=== {c['id']} ({a.study}, {a.mode} mode) ===")
         config.save_case(c)
         try:
             for s in steps:
@@ -84,7 +86,7 @@ def main(argv=None):
                 return 1
     if a.step == "all" and not a.dry_run:
         subprocess.call([sys.executable, os.path.join(POST_DIR, "plot_results.py"),
-                         "--study", a.study])
+                         "--study", a.study, "--mode", a.mode])
     if failed:
         print(f"failed cases: {failed}")
         return 1

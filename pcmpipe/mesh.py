@@ -27,8 +27,26 @@ import shutil
 from . import foam, geometry
 from .foam import vec, num
 
-REGIONS = ("air", "shell", "pcm")
-FLUID_INTERFACES = {"air": "air_to_shell", "pcm": "pcm_to_shell"}
+def thin_shell(case: dict) -> bool:
+    """Screening mode: shell as a thermal resistance, not meshed (model.shell: thin)."""
+    return case.get("model", {}).get("shell", "resolved") == "thin"
+
+
+def regions(case: dict) -> tuple:
+    return ("air", "pcm") if thin_shell(case) else ("air", "shell", "pcm")
+
+
+def fluid_interfaces(case: dict) -> dict:
+    if thin_shell(case):
+        return {"air": "air_to_pcm", "pcm": "pcm_to_air"}
+    return {"air": "air_to_shell", "pcm": "pcm_to_shell"}
+
+
+def surfaces(case: dict) -> list:
+    """(name in snappyHexMeshDict, STL written by FreeCAD); first = air-facing surface."""
+    if thin_shell(case):
+        return [("pcm_cavity", "pcm_cavity_thin.stl")]
+    return [("panel_outer", "panel_outer.stl"), ("pcm_cavity", "pcm_cavity.stl")]
 
 
 def levels(case: dict) -> dict:
@@ -36,8 +54,8 @@ def levels(case: dict) -> dict:
     t = case["panel"]["shell_thickness_mm"] * 1e-3
     base = m["base_cell"]
     n_across = max(2, m["shell_cells_across"])     # 1 breaks the zone walk, see above
-    shell = max(m["surface_level_min"],
-                math.ceil(math.log2(base * n_across / t) - 1e-9))
+    shell = m["surface_level_min"] if thin_shell(case) else max(
+        m["surface_level_min"], math.ceil(math.log2(base * n_across / t) - 1e-9))
     return {"base": base, "shell": shell, "pcm": min(m["pcm_level"], shell),
             "air": m["air_distance_levels"], "plume": m["plume_level"],
             "shell_cell_mm": base / 2 ** shell * 1e3}
@@ -78,7 +96,7 @@ boundary
     extractFromSurfaceCoeffs {{ includedAngle {feat}; }}
     subsetFeatures {{ nonManifoldEdges no; openEdges yes; }}
     writeObj            yes;
-}}""" for s in ("panel_outer", "pcm_cavity")))
+}}""" for s, _ in surfaces(case)))
 
     # plume refinement box below the panel (inverted plume, Sec. 3.1)
     xs = [p[0] * 1e-3 for p in geo.footprint]
@@ -89,6 +107,15 @@ boundary
     air_levels = " ".join(f"({num(d)} {l})" for d, l in lv["air"])
     loc = geo.locations
     S = lv["shell"]
+    names = [s for s, _ in surfaces(case)]
+    # air-side distance refinement needs its own geometry entry; in thin mode the
+    # only surface is the cavity, so a copy of it (pcm_cavity_air.stl) is used
+    near = "pcm_cavity_air" if thin_shell(case) else "panel_outer"
+    geom = "\n".join(f"    {s}.stl {{ type triSurfaceMesh; name {s}; }}"
+                     for s in names + ([near] if near not in names else []))
+    feats = "\n".join(f'        {{ file "{s}.eMesh"; level {S}; }}' for s in names)
+    surfs = "\n".join(f"        {s} {{ level ({S} {S}); }}" for s in names)
+    locs = "\n".join(f"        ({vec(loc[r])} {r})" for r in regions(case))
 
     foam.write(os.path.join(sysd, "snappyHexMeshDict"), f"""
 castellatedMesh true;
@@ -97,8 +124,7 @@ addLayers       false;   // layers are added after splitMeshRegions (refineWallL
 
 geometry
 {{
-    panel_outer.stl {{ type triSurfaceMesh; name panel_outer; }}
-    pcm_cavity.stl  {{ type triSurfaceMesh; name pcm_cavity; }}
+{geom}
     plumeBox {{ type searchableBox; min {vec(plume_min)}; max {vec(plume_max)}; }}
 }}
 
@@ -112,8 +138,7 @@ castellatedMeshControls
 
     features
     (
-        {{ file "panel_outer.eMesh"; level {S}; }}
-        {{ file "pcm_cavity.eMesh";  level {S}; }}
+{feats}
     );
 
     refinementSurfaces
@@ -121,8 +146,7 @@ castellatedMeshControls
         // no faceZone here: unnamed surfaces stop the locationsInMesh walk;
         // named (faceZone) surfaces would be crossed by it (see ESI tutorial
         // heatTransfer/chtMultiRegionFoam/snappyMultiRegionHeater)
-        panel_outer {{ level ({S} {S}); }}
-        pcm_cavity  {{ level ({S} {S}); }}
+{surfs}
     }}
 
     resolveFeatureAngle 30;
@@ -130,7 +154,7 @@ castellatedMeshControls
     refinementRegions
     {{
         pcm_cavity  {{ mode inside;   levels ((1e15 {lv["pcm"]})); }}
-        panel_outer {{ mode distance; levels ({air_levels}); }}
+        {near} {{ mode distance; levels ({air_levels}); }}
         plumeBox    {{ mode inside;   levels ((1e15 {lv["plume"]})); }}
     }}
 
@@ -138,9 +162,7 @@ castellatedMeshControls
     // faceZones between different cellZones are created automatically
     locationsInMesh
     (
-        ({vec(loc["air"])} air)
-        ({vec(loc["shell"])} shell)
-        ({vec(loc["pcm"])} pcm)
+{locs}
     );
     allowFreeStandingZoneFaces false;
 }}
@@ -242,9 +264,9 @@ def _refine_wall_layers(cdir: str, region: str, patch: str, passes: int, frac: f
         shutil.rmtree(tmp)
 
 
-def cell_counts(cdir: str) -> dict:
+def cell_counts(cdir: str, region_names=("air", "shell", "pcm")) -> dict:
     counts = {}
-    for r in REGIONS:
+    for r in region_names:
         log = os.path.join(cdir, f"log.checkMesh.{r}")
         if os.path.exists(log):
             m = re.search(r"^\s*cells:\s+(\d+)", open(log).read(), re.M)
@@ -261,12 +283,18 @@ def build(case: dict, n_procs: int = 1, dry: bool = False) -> dict:
     tri = os.path.join(cdir, "constant", "triSurface")
     os.makedirs(tri, exist_ok=True)
     if not dry:
-        for s in ("panel_outer.stl", "pcm_cavity.stl"):
-            shutil.copy(os.path.join(case["dir"], "cad", s), tri)
+        for name, src in surfaces(case):
+            shutil.copy(os.path.join(case["dir"], "cad", src), os.path.join(tri, f"{name}.stl"))
+        if thin_shell(case):
+            shutil.copy(os.path.join(tri, "pcm_cavity.stl"), os.path.join(tri, "pcm_cavity_air.stl"))
     write_mesh_system(cdir, n_procs)
     lv = write_dicts(case, geo, cdir)
-    print(f"  shell level {lv['shell']} -> {lv['shell_cell_mm']:.3f} mm cells "
-          f"({case['panel']['shell_thickness_mm'] / lv['shell_cell_mm']:.1f} across the shell)")
+    if thin_shell(case):
+        print(f"  thin shell ({case['panel']['shell_thickness_mm']:g} mm as a thermal resistance), "
+              f"surface cells {lv['shell_cell_mm']:.3f} mm")
+    else:
+        print(f"  shell level {lv['shell']} -> {lv['shell_cell_mm']:.3f} mm cells "
+              f"({case['panel']['shell_thickness_mm'] / lv['shell_cell_mm']:.1f} across the shell)")
 
     foam.run(["blockMesh"], cdir, dry=dry)
     foam.run(["surfaceFeatureExtract"], cdir, dry=dry)
@@ -284,7 +312,7 @@ def build(case: dict, n_procs: int = 1, dry: bool = False) -> dict:
 
     if not dry:
         # hexRef8 bookkeeping is invalid after refineWallLayer; not needed downstream
-        for r in REGIONS:
+        for r in regions(case):
             for f in ("cellLevel", "pointLevel", "level0Edge", "surfaceIndex", "refinementHistory"):
                 p = os.path.join(cdir, "constant", r, "polyMesh", f)
                 if os.path.exists(p):
@@ -292,13 +320,13 @@ def build(case: dict, n_procs: int = 1, dry: bool = False) -> dict:
         shutil.rmtree(os.path.join(cdir, "constant", "polyMesh"), ignore_errors=True)
 
     m = case["mesh"]
-    for region, patch in FLUID_INTERFACES.items():
+    for region, patch in fluid_interfaces(case).items():
         _refine_wall_layers(cdir, region, patch, m["active"]["wall_layer_passes"][region],
                             m["wall_layer_edge_fraction"], dry)
-    for r in REGIONS:
+    for r in regions(case):
         foam.run(["checkMesh", "-region", r, "-constant"], cdir, log=f"checkMesh.{r}", dry=dry)
 
-    counts = cell_counts(cdir)
+    counts = cell_counts(cdir, regions(case))
     if counts and all(counts.values()):
         print(f"  cells: {counts}  total {sum(counts.values()):,}")
     return counts

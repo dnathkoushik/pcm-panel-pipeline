@@ -66,6 +66,22 @@ class OfflinePipeline(unittest.TestCase):
                     "constant/regionProperties", "0/air/T", "0/pcm/T", "0/shell/T"):
             self.assertTrue(os.path.isfile(os.path.join(case, rel)), rel)
 
+    def test_1b_screening_mode(self):
+        self.pcmpipe("mesh", "--study", "shapes", "--mode", "screening", "--dry-run")
+        self.pcmpipe("setup", "--study", "shapes", "--mode", "screening")
+        case = os.path.join(self.tmp.name, "hem_V250_r50_t1_g0_dT20_screen", "case")
+        with open(os.path.join(case, "constant", "regionProperties")) as f:
+            self.assertIn("solid ()", f.read())
+        self.assertFalse(os.path.exists(os.path.join(case, "0", "shell")))
+        with open(os.path.join(case, "0", "pcm", "T")) as f:
+            T = f.read()
+        self.assertIn("pcm_to_air", T)
+        self.assertIn("thicknessLayers (0.001)", T)
+        with open(os.path.join(case, "system", "snappyHexMeshDict")) as f:
+            snappy = f.read()
+        self.assertNotIn("panel_outer", snappy)
+        self.assertIn("pcm_cavity_air", snappy)
+
     def test_2_results_and_plots(self):
         for study in ("validation", "volume"):
             self.pcmpipe("setup", "--study", study)

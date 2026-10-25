@@ -21,8 +21,21 @@ panel:
 
 delta_T: 20.0                 # T_air - T_pcm0 [K]; T_pcm0 stays 278.15 K (Sec. 4.2)
 
+model:
+  # resolved: ABS shell meshed as a solid region (paper Sec. 3, Eq. 12).
+  # thin:     shell as a 1D thermal resistance (thickness/k) in the air-PCM coupling;
+  #           no shell cells, PCM reaches the ceiling. Much cheaper; for screening.
+  shell: resolved
+
+# Run any study in a mode with:  python3 -m pcmpipe <step> --study X --mode screening
+modes:
+  paper: {}
+  screening:
+    model.shell: thin
+    mesh.preset: screen
+
 mesh:
-  preset: medium              # smoke | coarse | medium | fine  (paper: 8.6e5 / 1.1e6 / 1.7e6)
+  preset: medium              # smoke | screen | coarse | medium | fine  (paper: 8.6e5 / 1.1e6 / 1.7e6)
   # Keep base_cell = 0.128 m: refinement level L then gives 128 mm / 2^L
   # (level 7 = 1 mm, 8 = 0.5 mm). Shell level = max(surface_level_min,
   # ceil(log2(base_cell * shell_cells_across / t))). Cell counts are estimates;
@@ -32,6 +45,14 @@ mesh:
       base_cell: 0.128
       shell_cells_across: 2
       surface_level_min: 6
+      pcm_level: 6
+      air_distance_levels: [[0.004, 6], [0.015, 5], [0.04, 4], [0.1, 3]]
+      plume_level: 2
+      wall_layer_passes: {air: 1, pcm: 1}
+    screen:                   # screening mode (model.shell: thin): 1 mm surface cells
+      base_cell: 0.128
+      shell_cells_across: 2   # unused when the shell is not meshed
+      surface_level_min: 7
       pcm_level: 6
       air_distance_levels: [[0.004, 6], [0.015, 5], [0.04, 4], [0.1, 3]]
       plume_level: 2

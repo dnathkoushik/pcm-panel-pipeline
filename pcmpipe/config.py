@@ -38,6 +38,8 @@ def case_id(case: dict) -> str:
            f"_t{p['shell_thickness_mm']:g}_g{p['gap_mm']:g}_dT{case['delta_T']:g}")
     if case["mesh"]["preset"] != "medium":
         cid += f"_{case['mesh']['preset']}"
+    if case.get("model", {}).get("shell") == "thin" and case["mesh"]["preset"] != "screen":
+        cid += "_thin"
     if case.get("id_suffix") and not cid.endswith("_" + case["id_suffix"]):  # override studies get own folders
         cid += f"_{case['id_suffix']}"
     return cid
@@ -67,7 +69,12 @@ def study_names():
     return list(_load("studies.yaml").keys())
 
 
-def expand_study(name: str) -> list[dict]:
+def mode_names():
+    return list(_load("base_case.yaml").get("modes", {"paper": {}}).keys())
+
+
+def expand_study(name: str, mode: str = "paper") -> list[dict]:
+    """Cases of a study. Overrides apply in the order: mode, study override, vary."""
     studies = _load("studies.yaml")
     if name not in studies:
         raise KeyError(f"unknown study '{name}', choose from {list(studies)}")
@@ -76,6 +83,11 @@ def expand_study(name: str) -> list[dict]:
     cases = []
     for combo in itertools.product(*(spec["vary"][k] for k in keys)):
         case = base_case()
+        if mode not in case.get("modes", {}):
+            raise KeyError(f"unknown mode '{mode}', choose from {list(case.get('modes', {}))}")
+        for k, v in case["modes"][mode].items():
+            set_dotted(case, k, v)
+        case["mode"] = mode
         for k, v in spec.get("override", {}).items():
             set_dotted(case, k, v)
         if spec.get("override"):

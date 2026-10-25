@@ -21,12 +21,15 @@ def _field(path, cls, dims, internal, boundary):
     foam.write(path, body, cls=cls, location=os.path.basename(os.path.dirname(path)))
 
 
-def _coupled(T, method):
+def _coupled(T, method, layer=None):
+    """Coupled interface; `layer` = (thickness, conductivity) of a thin resistive layer."""
+    extra = (f"thicknessLayers ({num(layer[0])});\nkappaLayers     ({num(layer[1])});\n"
+             if layer else "")
     return f"""
 type            compressible::turbulentTemperatureCoupledBaffleMixed;
 Tnbr            T;
 kappaMethod     {method};
-value           uniform {num(T)};
+{extra}value           uniform {num(T)};
 """
 
 
@@ -36,6 +39,10 @@ def write_fields(case: dict, cdir: str):
     wf = ph["air"]["wall_functions"]
     p0 = num(ic["p"])
     zero_dir = os.path.join(cdir, "0")
+    thin = case.get("model", {}).get("shell", "resolved") == "thin"
+    # thin: ABS shell as a 1D resistance t/k between air and PCM (no shell region)
+    layer = (case["panel"]["shell_thickness_mm"] * 1e-3, ph["shell"]["k"]) if thin else None
+    air_if, pcm_if = ("air_to_pcm", "pcm_to_air") if thin else ("air_to_shell", "pcm_to_shell")
 
     # ------------------------------------------------------------------ air
     d = os.path.join(zero_dir, "air")
@@ -44,7 +51,7 @@ def write_fields(case: dict, cdir: str):
     # few stray faces snappy can leave on the panel_outer / pcm_cavity patches.
     _field(os.path.join(d, "T"), "volScalarField", "[0 0 0 1 0 0 0]", f"uniform {num(Ta)}", [
         (".*", "type zeroGradient;"),                     # adiabatic room walls
-        ("air_to_shell", _coupled(Ta, "fluidThermo")),
+        (air_if, _coupled(Ta, "fluidThermo", layer)),
     ])
     _field(os.path.join(d, "U"), "volVectorField", "[0 1 -1 0 0 0 0]", "uniform (0 0 0)", [
         (".*", "type noSlip;"),
@@ -76,7 +83,7 @@ def write_fields(case: dict, cdir: str):
     Tp = ic["T_pcm"]
     _field(os.path.join(d, "T"), "volScalarField", "[0 0 0 1 0 0 0]", f"uniform {num(Tp)}", [
         (".*", "type zeroGradient;"),
-        ("pcm_to_shell", _coupled(Tp, "fluidThermo")),
+        (pcm_if, _coupled(Tp, "fluidThermo", layer)),
     ])
     _field(os.path.join(d, "U"), "volVectorField", "[0 1 -1 0 0 0 0]", "uniform (0 0 0)", [
         (".*", "type noSlip;"),                           # Eq. 24: u = 0
@@ -87,6 +94,9 @@ def write_fields(case: dict, cdir: str):
     _field(os.path.join(d, "p_rgh"), "volScalarField", "[1 -1 -2 0 0 0 0]", f"uniform {p0}", [
         (".*", f"type fixedFluxPressure; value uniform {p0};"),
     ])
+
+    if thin:
+        return
 
     # ---------------------------------------------------------------- shell
     d = os.path.join(zero_dir, "shell")

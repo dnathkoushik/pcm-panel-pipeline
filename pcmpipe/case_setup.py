@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import os
 
-from . import cad, fields, foam
+from . import cad, fields, foam, mesh
 from .foam import num, vec
 
 
@@ -48,11 +48,14 @@ mixture
 def write_constant(case: dict, cdir: str):
     ph = case["physics"]
     c = os.path.join(cdir, "constant")
-    foam.write(os.path.join(c, "regionProperties"), "regions\n(\n    fluid (air pcm)\n    solid (shell)\n);")
+    thin = mesh.thin_shell(case)
+    solids = "" if thin else "shell"     # thin: shell is a resistance in the BC, no region
+    foam.write(os.path.join(c, "regionProperties"),
+               f"regions\n(\n    fluid (air pcm)\n    solid ({solids})\n);")
     # openfoam.com chtMultiRegionFoam reads one case-level g (as in its tutorials)
     foam.write(os.path.join(c, "g"), f"dimensions [0 1 -2 0 0 0 0];\nvalue {vec(ph['gravity'])};",
                cls="uniformDimensionedVectorField", location="constant")
-    for r in ("air", "pcm", "shell"):
+    for r in mesh.regions(case):
         foam.write(os.path.join(c, r, "radiationProperties"), "radiation off;\nradiationModel none;")
 
     a = ph["air"]
@@ -106,6 +109,8 @@ pcmPhaseChange
 }}
 """)
 
+    if thin:
+        return
     s = ph["shell"]
     foam.write(os.path.join(c, "shell", "thermophysicalProperties"), f"""
 thermoType
@@ -211,6 +216,21 @@ def write_system(case: dict, cdir: str, meta: dict):
         end_s = 60.0 * float(run["end_time_min"])
     probes = " ".join(vec(v) for v in meta["probes"].values())
     dt_sample = num(run["sample_interval_s"])
+    thin = mesh.thin_shell(case)
+    pcm_if = mesh.fluid_interfaces(case)["pcm"]
+    shell_minmax = "" if thin else """
+    shellTMinMax
+    {
+        type            fieldMinMax;
+        libs            (fieldFunctionObjects);
+        region          shell;
+        fields          (T);
+        mode            magnitude;
+        location        true;
+        writeControl    timeStep;
+        writeInterval   5;
+    }
+"""
 
     foam.write(os.path.join(sysd, "controlDict"), f"""
 application     chtMultiRegionFoam;
@@ -269,7 +289,7 @@ functions
         type            wallHeatFlux;
         libs            (fieldFunctionObjects);
         region          pcm;
-        patches         (pcm_to_shell);
+        patches         ({pcm_if});
         writeControl    adjustableRunTime;
         writeInterval   {dt_sample};
         writeFields     false;
@@ -286,19 +306,7 @@ functions
         writeControl    timeStep;
         writeInterval   5;
     }}
-
-    shellTMinMax
-    {{
-        type            fieldMinMax;
-        libs            (fieldFunctionObjects);
-        region          shell;
-        fields          (T);
-        mode            magnitude;
-        location        true;
-        writeControl    timeStep;
-        writeInterval   5;
-    }}
-
+{shell_minmax}
     airTMinMax
     {{
         type            fieldMinMax;
@@ -334,12 +342,14 @@ functions
 """)
     foam.write(os.path.join(sysd, "fvSchemes"), "")
     foam.write(os.path.join(sysd, "fvSolution"), f"PIMPLE\n{{\n    nOuterCorrectors {sv['nOuterCorrectors']};\n}}")
-    write_decomposition(cdir, run["n_procs"], run["decomposition"])
+    write_decomposition(cdir, run["n_procs"], run["decomposition"], mesh.regions(case))
 
     div = "linearUpwind" if sv["div_scheme"] == "linearUpwind" else sv["div_scheme"]
     for r, turb, pcm in (("air", True, False), ("pcm", False, True)):
         foam.write(os.path.join(sysd, r, "fvSchemes"), _fluid_schemes(div, turb, pcm))
         foam.write(os.path.join(sysd, r, "fvSolution"), _fluid_solution(sv, turb))
+    if thin:
+        return
     foam.write(os.path.join(sysd, "shell", "fvSchemes"), """
 ddtSchemes      { default Euler; }
 gradSchemes     { default Gauss linear; }
@@ -362,10 +372,11 @@ PIMPLE
 """)
 
 
-def write_decomposition(cdir: str, n_procs: int, method: str = "scotch"):
+def write_decomposition(cdir: str, n_procs: int, method: str = "scotch",
+                        region_names=("air", "shell", "pcm")):
     """decomposeParDict for the case and every region (must match the MPI rank count)."""
     body = f"numberOfSubdomains {n_procs};\nmethod {method};"
-    for sub in ("", "air", "pcm", "shell"):
+    for sub in ("", *region_names):
         foam.write(os.path.join(cdir, "system", sub, "decomposeParDict"), body)
 
 
@@ -406,12 +417,18 @@ def case_meta(case: dict) -> dict:
             "z": [geo.z_tip * 1e-3, 0.0]},
         "exposed_area_cm2_analytic": geo.exposed_area_mm2 / 100.0,
         "latent_heat": case["physics"]["pcm"]["latent_heat"],
+        "mode": case.get("mode", "paper"),
+        "shell_model": "thin" if mesh.thin_shell(case) else "resolved",
     }
     try:
         rep = cad.cad_report(case)
-        meta.update(pcm_mass_g=rep["pcm_mass_g"], cavity_volume_ml=rep["cavity_volume_ml"],
-                    exposed_area_cm2=rep["exposed_area_cm2"])
-    except FileNotFoundError:   # dry run without CAD
+        if mesh.thin_shell(case):   # PCM fills the cavity up to the ceiling
+            meta.update(pcm_mass_g=rep["pcm_mass_thin_g"],
+                        exposed_area_cm2=rep["cavity_thin_area_cm2"])
+        else:
+            meta.update(pcm_mass_g=rep["pcm_mass_g"], exposed_area_cm2=rep["exposed_area_cm2"])
+        meta["cavity_volume_ml"] = rep["cavity_volume_ml"]
+    except (FileNotFoundError, KeyError):   # dry run without CAD / old CAD report
         meta["pcm_mass_g"] = None
     return meta
 
