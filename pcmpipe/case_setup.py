@@ -288,14 +288,12 @@ functions
 """)
     foam.write(os.path.join(sysd, "fvSchemes"), "")
     foam.write(os.path.join(sysd, "fvSolution"), f"PIMPLE\n{{\n    nOuterCorrectors {sv['nOuterCorrectors']};\n}}")
-    decomp = f"numberOfSubdomains {run['n_procs']};\nmethod {run['decomposition']};"
-    foam.write(os.path.join(sysd, "decomposeParDict"), decomp)
+    write_decomposition(cdir, run["n_procs"], run["decomposition"])
 
     div = "linearUpwind" if sv["div_scheme"] == "linearUpwind" else sv["div_scheme"]
     for r, turb, pcm in (("air", True, False), ("pcm", False, True)):
         foam.write(os.path.join(sysd, r, "fvSchemes"), _fluid_schemes(div, turb, pcm))
         foam.write(os.path.join(sysd, r, "fvSolution"), _fluid_solution(sv, turb))
-        foam.write(os.path.join(sysd, r, "decomposeParDict"), decomp)
     foam.write(os.path.join(sysd, "shell", "fvSchemes"), """
 ddtSchemes      { default Euler; }
 gradSchemes     { default Gauss linear; }
@@ -316,7 +314,13 @@ PIMPLE
     nNonOrthogonalCorrectors {sv['nNonOrthogonalCorrectors']};
 }}
 """)
-    foam.write(os.path.join(sysd, "shell", "decomposeParDict"), decomp)
+
+
+def write_decomposition(cdir: str, n_procs: int, method: str = "scotch"):
+    """decomposeParDict for the case and every region (must match the MPI rank count)."""
+    body = f"numberOfSubdomains {n_procs};\nmethod {method};"
+    for sub in ("", "air", "pcm", "shell"):
+        foam.write(os.path.join(cdir, "system", sub, "decomposeParDict"), body)
 
 
 def _stop_block(run):
