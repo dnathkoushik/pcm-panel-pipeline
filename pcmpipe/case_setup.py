@@ -31,6 +31,10 @@ thermoType
     energy          sensibleEnthalpy;
 }}
 
+// Eqs. 4/15 have no dp/dt term. With the Boussinesq (incompressible) EoS the
+// pressure level floats in the closed room, and dp/dt made T unbounded (CI run).
+dpdt            no;
+
 mixture
 {{
     specie          {{ molWeight {num(molw)}; }}
@@ -187,7 +191,13 @@ PIMPLE
     pRefValue                1e5;
 }}
 
-relaxationFactors {{ equations {{ ".*" 1; }} }}
+// Momentum/pressure relaxed on the non-final outer corrector only; h stays at 1
+// so the latent-heat Newton iteration converges as in tests/test_latent_source_1d.py
+relaxationFactors
+{{
+    fields      {{ p_rgh 0.7; p_rghFinal 1; }}
+    equations   {{ "(U|k|epsilon)" 0.7; "(U|k|epsilon)Final" 1; "h.*" 1; }}
+}}
 """
 
 
