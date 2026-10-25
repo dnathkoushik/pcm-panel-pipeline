@@ -45,9 +45,9 @@ def write_constant(case: dict, cdir: str):
     ph = case["physics"]
     c = os.path.join(cdir, "constant")
     foam.write(os.path.join(c, "regionProperties"), "regions\n(\n    fluid (air pcm)\n    solid (shell)\n);")
-    for r in ("air", "pcm"):
-        foam.write(os.path.join(c, r, "g"), f"dimensions [0 1 -2 0 0 0 0];\nvalue {vec(ph['gravity'])};",
-                   cls="uniformDimensionedVectorField", location=f"constant/{r}")
+    # openfoam.com chtMultiRegionFoam reads one case-level g (as in its tutorials)
+    foam.write(os.path.join(c, "g"), f"dimensions [0 1 -2 0 0 0 0];\nvalue {vec(ph['gravity'])};",
+               cls="uniformDimensionedVectorField", location="constant")
     for r in ("air", "pcm", "shell"):
         foam.write(os.path.join(c, r, "radiationProperties"), "radiation off;\nradiationModel none;")
 
