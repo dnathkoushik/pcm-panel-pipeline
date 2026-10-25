@@ -158,7 +158,7 @@ Values may include arguments, e.g. `PCMPIPE_MPIRUN="mpirun --oversubscribe"`.
 
 ```bash
 make test        # = python3 -m unittest discover -s tests -v   (~40 s, no OpenFOAM needed)
-make smoke NP=4  # CAD, smoke mesh (1 cell across the shell), 2 simulated minutes, post, plots
+make smoke NP=4  # CAD, coarse smoke mesh, 2 simulated minutes, post, plots
 ```
 
 `make test` covers:

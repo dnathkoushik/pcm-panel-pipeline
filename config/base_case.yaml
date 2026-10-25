@@ -28,14 +28,14 @@ mesh:
   # ceil(log2(base_cell * shell_cells_across / t))). Cell counts are estimates;
   # read the real ones from log.checkMesh.* and tune.
   presets:
-    smoke:                    # plumbing test only (1 cell across the shell)
+    smoke:                    # plumbing test only (coarse air and PCM)
       base_cell: 0.128
-      shell_cells_across: 1
+      shell_cells_across: 2
       surface_level_min: 6
       pcm_level: 6
       air_distance_levels: [[0.004, 6], [0.015, 5], [0.04, 4], [0.1, 3]]
       plume_level: 2
-      wall_layer_passes: {air: 0, pcm: 0}
+      wall_layer_passes: {air: 1, pcm: 1}
     coarse:
       base_cell: 0.128        # background blockMesh cell [m]
       shell_cells_across: 2

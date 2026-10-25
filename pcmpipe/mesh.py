@@ -12,7 +12,9 @@ Workflow inside runs/<case>/case:
                             both interfaces. Interface faces are not split, so
                             the conformal coupling survives.
   checkMesh -region <r>
-The shell is resolved with >= `shell_cells_across` cells through its thickness.
+The shell is resolved with >= `shell_cells_across` (at least 2) cells through its
+thickness. With a single cell, one cell-to-cell step can cross both surfaces and
+snappy's locationsInMesh zone walk leaks (all cells end up in one zone).
 """
 from __future__ import annotations
 
@@ -33,8 +35,9 @@ def levels(case: dict) -> dict:
     m = case["mesh"]["active"]
     t = case["panel"]["shell_thickness_mm"] * 1e-3
     base = m["base_cell"]
+    n_across = max(2, m["shell_cells_across"])     # 1 breaks the zone walk, see above
     shell = max(m["surface_level_min"],
-                math.ceil(math.log2(base * m["shell_cells_across"] / t) - 1e-9))
+                math.ceil(math.log2(base * n_across / t) - 1e-9))
     return {"base": base, "shell": shell, "pcm": min(m["pcm_level"], shell),
             "air": m["air_distance_levels"], "plume": m["plume_level"],
             "shell_cell_mm": base / 2 ** shell * 1e3}
