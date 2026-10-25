@@ -211,10 +211,12 @@ laptop. Every study can therefore run in one of two modes (`--mode`, or `MODE=` 
 | Mesh preset | `screen`: 1 mm surface cells | `medium` |
 | Results folder | `runs/<case>_screen/`, figures in `runs/_figures/<study>_screening/` | `runs/<case>/`, `runs/_figures/<study>/` |
 
-The shell's heat capacity (about 0.4 % of the PCM's latent heat) is the only physics
-screening mode drops. Its geometry approximation (PCM up to the ceiling, about 5 % more
-PCM for 1 mm) is reported in `metrics.json` through the actual PCM mass. Rank designs on
-screening results, then re-run the shortlist in paper mode:
+The only physics screening mode drops is the heat stored in the shell itself. For the
+250 mL pyramid that is about 70 J/K (35 g of ABS), or 1.0–1.4 kJ over a 15–20 K rise:
+5–7 % of the PCM's 21 kJ latent heat. The bias is similar for every design, so screening can
+rank designs but not give absolute melting times. Its geometry approximation (PCM up to the
+ceiling, about 5 % more PCM for 1 mm) is reported in `metrics.json` through the actual PCM
+mass. Rank designs on screening results, then re-run the shortlist in paper mode:
 
 ```bash
 make study STUDY=shapes MODE=screening NP=8      # or: python3 -m pcmpipe all --study shapes --mode screening
