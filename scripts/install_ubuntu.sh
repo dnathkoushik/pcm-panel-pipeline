@@ -10,7 +10,12 @@ cd "$(dirname "$0")/.."
 case "$PWD" in *" "*) echo "ERROR: path contains spaces ($PWD); OpenFOAM cannot handle that. Clone elsewhere."; exit 1;; esac
 
 sudo apt-get update
-sudo apt-get install -y curl ca-certificates gnupg
+sudo apt-get install -y curl ca-certificates gnupg software-properties-common
+# Ubuntu 24.04 dropped FreeCAD from its archive: use the official FreeCAD PPA there
+if [ -z "$(apt-cache policy freecad 2>/dev/null | sed -n 's/^ *Candidate: //p' | grep -v none)" ] \
+   && grep -qi ubuntu /etc/os-release; then
+    sudo add-apt-repository -y ppa:freecad-maintainers/freecad-stable
+fi
 curl -fsSL https://dl.openfoam.com/add-debian-repo.sh | sudo bash
 sudo apt-get update
 sudo apt-get install -y "openfoam${OF_VERSION}-default" \

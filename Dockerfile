@@ -18,8 +18,10 @@ ENV PCMPIPE_PVPYTHON="xvfb-run -a -s '-screen 0 1920x1080x24' pvpython"
 ENV OMPI_MCA_btl_vader_single_copy_mechanism=none \
     OMPI_MCA_rmaps_base_oversubscribe=1
 
+# FreeCAD is not in the Ubuntu 24.04 archive: use the official FreeCAD PPA
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
+ && apt-get install -y --no-install-recommends ca-certificates curl gnupg software-properties-common \
+ && add-apt-repository -y ppa:freecad-maintainers/freecad-stable \
  && curl -fsSL https://dl.openfoam.com/add-debian-repo.sh | bash \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
