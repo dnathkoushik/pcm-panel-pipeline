@@ -304,7 +304,7 @@ The paper does not give these values. Each one is a single line to change.
   Expect to fix small version-specific issues on the first `smoke` run. Most likely:
   1. **Compiling the fvOption** (`openfoam/Allwmake`). Written against the openfoam.com
      v2306+ `fv::cellSetOption` API. Check `wmake` output first.
-  2. **Multi-region snappyHexMesh.** Zones come from `locationsInMesh` plus faceZones. If
+  2. **Multi-region snappyHexMesh.** Zones come from `locationsInMesh` (the surfaces carry no faceZone; snappy creates them). If
      `splitMeshRegions` does not produce exactly `air`, `shell`, `pcm`, open the snappy
      log and `checkMesh` output. Raise `shell_cells_across` if the 1 mm shell
      breaks up.

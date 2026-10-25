@@ -4,7 +4,7 @@ Workflow inside runs/<case>/case:
   blockMesh                 room background mesh (paper Sec. 2.4 dimensions)
   surfaceFeatureExtract     sharp edges of the panel and cavity STLs
   snappyHexMesh -overwrite  castellate + snap; locationsInMesh -> cellZones
-                            air | shell | pcm, faceZones on both interfaces
+                            air | shell | pcm; snappy creates the interface faceZones
   splitMeshRegions -cellZones -overwrite
                             constant/{air,shell,pcm}/polyMesh with conformal
                             mappedWall patches air_to_shell, shell_to_pcm, ...
@@ -118,8 +118,11 @@ castellatedMeshControls
 
     refinementSurfaces
     {{
-        panel_outer {{ level ({S} {S}); faceZone air_shell; }}
-        pcm_cavity  {{ level ({S} {S}); faceZone shell_pcm; }}
+        // no faceZone here: unnamed surfaces stop the locationsInMesh walk;
+        // named (faceZone) surfaces would be crossed by it (see ESI tutorial
+        // heatTransfer/chtMultiRegionFoam/snappyMultiRegionHeater)
+        panel_outer {{ level ({S} {S}); }}
+        pcm_cavity  {{ level ({S} {S}); }}
     }}
 
     resolveFeatureAngle 30;
@@ -131,7 +134,8 @@ castellatedMeshControls
         plumeBox    {{ mode inside;   levels ((1e15 {lv["plume"]})); }}
     }}
 
-    // flood fill from each point, bounded by the faceZones -> cellZones
+    // flood fill from each point, bounded by the surfaces -> cellZones;
+    // faceZones between different cellZones are created automatically
     locationsInMesh
     (
         ({vec(loc["air"])} air)
