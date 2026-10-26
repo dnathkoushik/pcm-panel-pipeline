@@ -1,11 +1,12 @@
 """Step 3 -- chtMultiRegionFoam case: constant/, system/ and 0/ for air|shell|pcm.
 
 Paper -> OpenFOAM mapping
-  Eqs. 2-11 (air, Realizable k-eps)   air region, heRhoThermo + Boussinesq EoS (Eq. 17),
-                                      RAS realizableKE, standard wall functions (Eq. 23)
+  Eqs. 2-11 (air, Realizable k-eps)   air region, heRhoThermo + rhoConst, Boussinesq
+                                      buoyancy fvOption (Eq. 17), RAS realizableKE,
+                                      standard wall functions (Eq. 23)
   Eq. 12 (ABS shell)                  shell region, heSolidThermo (constant properties)
-  Eqs. 13-21 (PCM, laminar)           pcm region, heRhoThermo + Boussinesq EoS (Eq. 16),
-                                      laminar, pcmEnthalpyPorositySource fvOption
+  Eqs. 13-21 (PCM, laminar)           pcm region, heRhoThermo + rhoConst, Boussinesq
+                                      buoyancy (Eq. 16) and pcmEnthalpyPorositySource fvOptions
   Eq. 24 (interfaces)                 turbulentTemperatureCoupledBaffleMixed + noSlip
   SIMPLE / 2nd-order upwind / 0.5 s   PIMPLE (transient CHT) / linearUpwind / maxDeltaT 0.5
 """
@@ -18,7 +19,7 @@ from . import cad, config, fields, foam, loads, mesh
 from .foam import num, vec
 
 
-def _thermo_fluid(f, rho0, T0, beta, cp, mu, Pr, molw):
+def _thermo_fluid(f, rho0, cp, mu, Pr, molw):
     return f"""
 thermoType
 {{
@@ -26,21 +27,41 @@ thermoType
     mixture         pureMixture;
     transport       const;
     thermo          hConst;
-    equationOfState Boussinesq;
+    equationOfState rhoConst;
     specie          specie;
     energy          sensibleEnthalpy;
 }}
 
-// Eqs. 4/15 have no dp/dt term. With the Boussinesq (incompressible) EoS the
+// Eqs. 4/15 have no dp/dt term. With an incompressible EoS the
 // pressure level floats in the closed room, and dp/dt made T unbounded (CI run).
 dpdt            no;
 
+// Boussinesq approximation as in the paper (Fluent): constant density in every
+// equation, buoyancy from the boussinesqBuoyancySource fvOption. The Boussinesq
+// EoS would put rho(T) into continuity and energy as well; in the sealed PCM
+// capsule and the closed room that broke mass conservation and drove single
+// cells tens of kelvin out of bounds (CI diagnostic: gone with beta = 0).
 mixture
 {{
     specie          {{ molWeight {num(molw)}; }}
-    equationOfState {{ rho0 {num(rho0)}; T0 {num(T0)}; beta {num(beta)}; }}
+    equationOfState {{ rho {num(rho0)}; }}
     thermodynamics  {{ Cp {num(cp)}; Hf 0; }}
     transport       {{ mu {num(mu)}; Pr {num(Pr)}; }}
+}}
+"""
+
+
+def _buoyancy(beta, T0, g):
+    """Boussinesq buoyancy rho0 beta (T0 - T) g (Eqs. 16/17) for a fluid region's fvOptions."""
+    return f"""
+boussinesq
+{{
+    type            boussinesqBuoyancySource;
+    active          yes;
+    selectionMode   all;
+    beta            {num(beta)};
+    TRef            {num(T0)};
+    g               {vec(g)};
 }}
 """
 
@@ -60,7 +81,8 @@ def write_constant(case: dict, cdir: str):
 
     a = ph["air"]
     foam.write(os.path.join(c, "air", "thermophysicalProperties"), _thermo_fluid(
-        "air", a["rho"], a["T_ref"], a["beta"], a["cp"], a["mu"], a["mu"] * a["cp"] / a["k"], a["molWeight"]))
+        "air", a["rho"], a["cp"], a["mu"], a["mu"] * a["cp"] / a["k"], a["molWeight"]))
+    foam.write(os.path.join(c, "air", "fvOptions"), _buoyancy(a["beta"], a["T_ref"], ph["gravity"]))
     tu = a["turbulence"]
     foam.write(os.path.join(c, "air", "turbulenceProperties"), f"""
 simulationType  RAS;
@@ -85,10 +107,10 @@ RAS
     # the fvOption restores the solid/mushy values (see pcmEnthalpyPorositySource.H)
     p = ph["pcm"]
     foam.write(os.path.join(c, "pcm", "thermophysicalProperties"), _thermo_fluid(
-        "pcm", p["rho"], p["T_ref"], p["beta"], p["cp_liquid"], p["mu"],
+        "pcm", p["rho"], p["cp_liquid"], p["mu"],
         p["mu"] * p["cp_liquid"] / p["k_liquid"], p["molWeight"]))
     foam.write(os.path.join(c, "pcm", "turbulenceProperties"), "simulationType  laminar;")
-    foam.write(os.path.join(c, "pcm", "fvOptions"), f"""
+    foam.write(os.path.join(c, "pcm", "fvOptions"), _buoyancy(p["beta"], p["T_ref"], ph["gravity"]) + f"""
 pcmPhaseChange
 {{
     type            pcmEnthalpyPorositySource;

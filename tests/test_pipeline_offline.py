@@ -65,6 +65,16 @@ class OfflinePipeline(unittest.TestCase):
         for rel in ("system/snappyHexMeshDict", "system/controlDict", "constant/pcm/fvOptions",
                     "constant/regionProperties", "0/air/T", "0/pcm/T", "0/shell/T"):
             self.assertTrue(os.path.isfile(os.path.join(case, rel)), rel)
+        # Boussinesq as in the paper: constant density, buoyancy as a momentum source
+        for region, beta, T0 in (("air", "0.00335401643", "298.15"), ("pcm", "0.00085", "286")):
+            with open(os.path.join(case, "constant", region, "thermophysicalProperties")) as f:
+                self.assertIn("equationOfState rhoConst;", f.read())
+            with open(os.path.join(case, "constant", region, "fvOptions")) as f:
+                fvo = f.read()
+            self.assertIn("type            boussinesqBuoyancySource;", fvo)
+            self.assertIn(f"beta            {beta};", fvo)
+            self.assertIn(f"TRef            {T0};", fvo)
+            self.assertIn("g               (0 0 -9.81);", fvo)
 
     def test_1b_screening_mode(self):
         self.pcmpipe("mesh", "--study", "shapes", "--mode", "screening", "--dry-run")

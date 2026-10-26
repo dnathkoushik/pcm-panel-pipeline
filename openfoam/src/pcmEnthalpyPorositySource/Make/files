@@ -1,3 +1,4 @@
 pcmEnthalpyPorositySource.C
+boussinesqBuoyancySource.C
 
 LIB = $(FOAM_USER_LIBBIN)/libpcmEnthalpyPorosity

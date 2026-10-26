@@ -322,11 +322,16 @@ These go into the same dictionaries as the paper's PCM:
 mixture
 {
     specie          { molWeight 254.5; }
-    equationOfState { rho0 776.9; T0 301.13; beta 0.00087; }
+    equationOfState { rho 776.9; }                  // rhoConst: Boussinesq rho0
     thermodynamics  { Cp 2230; Hf 0; }              // liquid cp; the fvOption restores the rest
     transport       { mu 0.00363; Pr 53.26; }
 }
 // constant/pcm/fvOptions
+boussinesq
+{
+    type boussinesqBuoyancySource;  selectionMode all;
+    beta 0.00087;  TRef 301.13;  g (0 0 -9.81);    // rho0 beta (TRef - T) g
+}
 pcmPhaseChange
 {
     type pcmEnthalpyPorositySource;  selectionMode all;  energyField h;
@@ -396,10 +401,11 @@ constant load instead, set `weather.T_max_C` = `T_min_C` and
 
 | Paper | OpenFOAM implementation |
 |---|---|
-| Air: Eqs. 2–11, incompressible turbulent flow, Realizable k-ε | `air` fluid region: `heRhoThermo` + `Boussinesq` EoS (Eq. 17, T_ref = ambient), `RAS realizableKE` (C2 = 1.9, σk = 1). No buoyancy production in k-ε, as in Eqs. 7–8 |
+| Air: Eqs. 2–11, incompressible turbulent flow, Realizable k-ε | `air` fluid region: `heRhoThermo` + `rhoConst`, buoyancy ρ0 β (T_ref − T) g from the `boussinesqBuoyancySource` fvOption (Eq. 17, T_ref = ambient), `RAS realizableKE` (C2 = 1.9, σk = 1). No buoyancy production in k-ε, as in Eqs. 7–8 |
 | Standard wall functions, Eq. 23 (κ = 0.4187, Cμ = 0.09) | `nutkWallFunction` (Cmu 0.09, kappa 0.4187, E 9.793), `epsilonWallFunction`, `kqRWallFunction`, `alphatJayatillekeWallFunction` (Prt 0.85) |
 | ABS shell: Eq. 12 | `shell` solid region, `heSolidThermo` (ρ 1070, k 0.163, cp 1990) |
-| PCM: Eqs. 13–15, laminar | `pcm` fluid region: `heRhoThermo` + `Boussinesq` EoS (Eq. 16), `simulationType laminar` |
+| PCM: Eqs. 13–15, laminar | `pcm` fluid region: `heRhoThermo` + `rhoConst`, `boussinesqBuoyancySource` (Eq. 16), `simulationType laminar` |
+| Boussinesq approximation (density constant except in the buoyancy term, as in Fluent) | `rhoConst` + the buoyancy fvOption, not OpenFOAM's `Boussinesq` EoS. That EoS also puts ρ(T) into continuity and energy; in the sealed capsule and the closed room total mass is then not conserved, and the continuity error showed up as single PCM cells cooling at ~40 K/s (CI diagnostic: of six variants only β = 0 removed it) |
 | Liquid fraction, Eq. 1; H = h_sen + γL, Eqs. 18–20; properties linear in the mushy zone | `pcmEnthalpyPorositySource` fvOption (see below) |
 | Mushy-zone sink, Eq. 21: A_mush = 1e6, ε = 0.001 | same fvOption, implicit `fvm::Sp` sink |
 | Interfaces, Eq. 24: flux continuity, u = 0 | `compressible::turbulentTemperatureCoupledBaffleMixed` on conformal `mappedWall` patches, `noSlip` |
@@ -475,22 +481,24 @@ The paper does not give these values. Each one is a single line to change.
 - Screening mode: `chtMultiRegionFoam` runs the 0.6 s smoke run to the end.
 
 **Known issues** (open):
-1. **Temperature undershoot in the PCM.** Seen in both modes with `refineWallLayer` active:
-   - Paper mode: one interior PCM cell drifted below the initial temperature (−0.13 K at
-     0.6 s, −12 K at 3.5 s), and a later run crashed on its second step.
-   - Screening mode: one PCM cell next to the ceiling reached 248 K at 0.5 s.
-
-   Wall layers are now off by default and the fvOption has the kink limiter. In the first
-   paper-mode run without layers (CI, 141 steps) the PCM stayed within 0.0002 K of its
-   initial temperature. Check `postProcessing/pcm/pcmTMinMax/0/fieldMinMax.dat` (minimum and
-   its location) of the CI smoke runs before trusting results. **Until the minimum stays at
-   the initial PCM temperature in both modes, treat CFD numbers as provisional.**
+1. **Temperature undershoot in the PCM: cause found, fix being verified.** Single PCM cells
+   drifted below every temperature around them. In the screening smoke run (paper PCM,
+   ΔT = 20 K) one cell lost about 40 K/s, reaching 260.9 K at 0.5 s from 278.15 K; with
+   n-octadecane under the roof the drift was 0.15 K/s. A CI diagnostic ran six variants:
+   switching off the latent source, latent convection or the Darcy sink, or moving the
+   pressure reference cell, changed nothing; setting β = 0 removed it exactly. The cause
+   was OpenFOAM's `Boussinesq` equation of state (density varying in continuity and
+   energy in a sealed region). The cases now use `rhoConst` plus the
+   `boussinesqBuoyancySource` fvOption (section 4). Check
+   `postProcessing/pcm/pcmTMinMax/0/fieldMinMax.dat` of the CI smoke runs; **until the
+   minimum stays at the initial PCM temperature, treat CFD numbers as provisional.**
 2. **Air velocity spike in paper mode.** On the first step the air cells at the roots of
-   the V-grooves between touching pyramids (gap 0, just below the slab underside) reach
-   124 m/s. The spike decays only to about 3 m/s by 0.02 s, which holds the air Courant limit
-   at Δt ≈ 1e-4 s. In CI (2 cores) 0.021 s took 2 h 17 min, so the CI paper smoke run is
-   now capped at 40 min. Not yet fixed. Suspects are the snapped groove-root cells and the
-   20 K step at t = 0.
+   the V-grooves between touching pyramids (gap 0, just below the slab underside) reached
+   124 m/s. The spike decayed only to about 3 m/s by 0.02 s, which held the air Courant
+   limit at Δt ≈ 1e-4 s. In CI (2 cores) 0.021 s took 2 h 17 min, so the CI paper smoke run
+   is capped at 40 min. That run used the `Boussinesq` EoS in the closed room, the same
+   mass-conservation error as issue 1, so the `rhoConst` change may cure this too. Not yet
+   confirmed.
 3. **Cost of paper mode.** Even without that spike, the 0.5 mm shell cells cap the time step
    at about 0.015 s, against the paper's 0.5 s. Use screening mode for design studies
    (section 3).
