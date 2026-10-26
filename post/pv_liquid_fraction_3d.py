@@ -98,11 +98,12 @@ def main():
     bar.TitleColor = [0, 0, 0]
     bar.LabelColor = [0, 0, 0]
 
+    # solid colours; ColorBy(rep, None) fails on ParaView 5.11 for an uncoloured rep
     df = Show(front_cut, rv)
-    ColorBy(df, None)
+    df.ColorArrayName = ["POINTS", ""]
     df.DiffuseColor = [0.25, 0.25, 0.25]
     ds = Show(silhouette, rv)
-    ColorBy(ds, None)
+    ds.ColorArrayName = ["POINTS", ""]
     ds.DiffuseColor = [0.6, 0.6, 0.6]
     ds.Opacity = 0.12
 
