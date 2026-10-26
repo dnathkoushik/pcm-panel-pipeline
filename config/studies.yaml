@@ -51,3 +51,35 @@ smoke:                            # plumbing test (0.6 s of flow, ~60 steps), no
     run.n_procs: 4
     post.contour_times_min: [0.005, 0.01]
     run.sample_interval_s: 0.05
+
+# ---------------------------------------------------------------------------
+# n-octadecane panels under a Kharagpur RCC roof (PMAY retrofit), from 06:00 on
+# a hot May day (config/materials.yaml, config/loads.yaml). Run either way:
+#   python3 -m pcmpipe all --study octadecane_roof --mode screening --np 4   # laptop
+#   python3 -m pcmpipe all --study octadecane_roof --np 16 --np-mesh 16      # workstation
+# ---------------------------------------------------------------------------
+octadecane_roof:
+  vary:
+    panel.shape: [pyramid, tetrahedron, hemisphere]
+  override:
+    pcm_material: n_octadecane
+    loads: kharagpur_roof
+    run.max_end_time_min: 720     # 06:00-18:00, or earlier once fully melted
+    post.contour_times_min: [60, 120, 180, 240, 360, 480, 600, 720]
+    post.T_range_C: [24.0, 40.0]
+  id_suffix: false                # ids already carry _kgp_c18
+
+smoke_roof:                       # plumbing test of the n-octadecane / roof-load set-up
+  vary:
+    panel.shape: [pyramid]
+  override:
+    pcm_material: n_octadecane
+    loads: kharagpur_roof
+    mesh.preset: smoke
+    run.end_time_min: 0.01
+    run.write_interval_min: 0.005
+    run.n_procs: 4
+    post.contour_times_min: [0.005, 0.01]
+    post.T_range_C: [24.0, 40.0]
+    run.sample_interval_s: 0.05
+  id_suffix: false

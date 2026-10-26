@@ -43,6 +43,7 @@ Usage
         kappaSolid      0.183;
         kappaLiquid     0.169;
         latentConvection true;
+        kinkLimiter     true;   // default; needed for narrow melting ranges
     }
     \endverbatim
     Written fields: liquidFraction.
@@ -98,6 +99,13 @@ class pcmEnthalpyPorositySource
         //- Time index of E0_
         label E0TimeIndex_;
 
+        //- Limit outer-iteration updates at the solidus/liquidus kinks
+        bool kinkLimiter_;
+
+        //- T and he at which the energy source was last linearised
+        scalarField TLin_;
+        scalarField heLin_;
+
 
     // Private Member Functions
 
@@ -143,6 +151,12 @@ public:
             fvMatrix<vector>& eqn,
             const label fieldi
         );
+
+        //- After the energy solve: an update may not jump across Tsolidus
+        //  or Tliquidus in one outer iteration (it stops on the kink and is
+        //  re-linearised). Plain Newton oscillates for narrow melting ranges
+        //  (pure substances such as n-octadecane), see tests/.
+        virtual void correct(volScalarField& he) override;
 
         virtual bool read(const dictionary& dict);
 };

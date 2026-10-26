@@ -3,7 +3,10 @@
     python post/plot_results.py --study delta_T [--rate-convention physical|paper]
 
 Reads runs/<case>/metrics.json and series.csv (written by `pcmpipe results`) and
-writes figures to runs/_figures/<study>/.
+writes figures to runs/_figures/<study>/, plus every case's curves side by side in
+liquid_fraction_vs_time.csv and mean_pcm_temperature_vs_time.csv (one column per
+case on a common time axis) and, when `pcmpipe post` has run, a montage of the 3D
+liquid-fraction views (liquid_fraction_3d_montage.png).
 """
 from __future__ import annotations
 
@@ -61,6 +64,8 @@ def load(study, mode="paper"):
         if params and params[0] == "panel.protrusion_ratio":
             m["param"][params[0]] *= 100
         m["probes_data"] = res.probe_series(os.path.join(c["dir"], "case"))
+        m["dir"] = c["dir"]
+        m["contour_times_min"] = c["post"]["contour_times_min"]
         rows.append(m)
     return params, rows
 
@@ -111,12 +116,19 @@ def _styles(rows, param):
     return out
 
 
+def time_label(rows):
+    clock = rows[0].get("start_clock_h")
+    if clock is None:
+        return "Time (min)"
+    return f"Time (min) from {int(clock) % 24:02d}:{int(round(60 * (clock % 1))) % 60:02d}"
+
+
 def fig_liquid_fraction(rows, param, outdir):
     """Fig. 11 (right): liquid fraction curves for each shape / parameter value."""
     fig, ax = plt.subplots(figsize=(6.4, 4.6))
     for r, color, label in _styles(rows, param):
         ax.plot(r["series"][:, 0], r["series"][:, 1], LINESTYLE[r["shape"]], color=color, label=label)
-    ax.set_xlabel("Time (min)")
+    ax.set_xlabel(time_label(rows))
     ax.set_ylabel("Liquid fraction")
     ax.set_ylim(0, 1.05)
     ax.set_xlim(left=0)
@@ -130,8 +142,14 @@ def fig_mean_temperature(rows, param, outdir):
     for r, color, label in _styles(rows, param):
         ax.plot(r["series"][:, 0], r["series"][:, 2] - 273.15, LINESTYLE[r["shape"]],
                 color=color, label=label)
-    ax.set_xlabel("Time (min)")
-    ax.set_ylabel("Temperature (°C)")
+    r0 = rows[0]
+    if r0.get("T_solidus") is not None:
+        ax.axhspan(r0["T_solidus"] - 273.15, r0["T_liquidus"] - 273.15, color="#31a354",
+                   alpha=0.2, lw=0, label="melting range")
+        ax.axhline(r0["T_melt"] - 273.15, color="#31a354", lw=0.9, ls="--",
+                   label=f"T$_m$ = {r0['T_melt'] - 273.15:.1f} °C")
+    ax.set_xlabel(time_label(rows))
+    ax.set_ylabel("Mean PCM temperature (°C)")
     ax.set_xlim(left=0)
     ax.legend(fontsize=8, loc="lower right")
     savefig(fig, outdir, "mean_pcm_temperature")
@@ -153,7 +171,7 @@ def fig_rate_twin(rows, outdir):
                         ha="right", fontsize=8)
     ax.axhline(0.8, color="k", lw=0.6, ls=":")
     ax.axhline(1.0, color="k", lw=0.6, ls=":")
-    ax.set_xlabel("Time (min)")
+    ax.set_xlabel(time_label(rows))
     ax.set_ylabel("Liquid fraction")
     ax2.set_ylabel("Melting rate (g min$^{-1}$)")
     ax.set_ylim(0, 1.03 + 0.045 * len(rows) + 0.03)
@@ -206,21 +224,72 @@ def fig_probes(rows, outdir):
         for i, (name, col) in enumerate((("top", "red"), ("mid", "blue"), ("bot", "green"))):
             if d.shape[1] > i + 1:
                 ax.plot(d[:, 0] / 60, d[:, i + 1] - 273.15, color=col, label=f"{name}_CFD")
-        ref = REF["melting_time_min"].get(r["shape"])
+        paper_setup = r.get("pcm_material", "paper_cla") == "paper_cla" and not r.get("loads")
+        ref = REF["melting_time_min"].get(r["shape"]) if paper_setup else None
         if ref:
             for k, ls in (("t80", ":"), ("t100", "--")):
                 ax.axvline(ref[k], color="gray", ls=ls, lw=0.8, label=f"paper {k} = {ref[k]} min")
         ax.set_title(r["shape"].capitalize())
-        ax.set_xlabel("Time (min)")
-        ax.set_ylabel("Temperature (Â°C)")
-        ax.set_ylim(0, 30)
+        ax.set_xlabel(time_label(rows))
+        ax.set_ylabel("Temperature (°C)")
+        if paper_setup:
+            ax.set_ylim(0, 30)
         ax.legend(fontsize=8, loc="lower right")
     savefig(fig, outdir, "probe_temperatures")
 
 
+def write_curves(rows, outdir):
+    """Liquid fraction and mean PCM temperature of every case on one time axis (CSV)."""
+    os.makedirs(outdir, exist_ok=True)
+    steps = [np.median(np.diff(r["series"][:, 0])) for r in rows if len(r["series"]) > 1]
+    if not steps:
+        return
+    t_end = max(r["series"][-1, 0] for r in rows)
+    t = np.arange(0.0, t_end + 0.5 * min(steps), min(steps))
+    for name, col, conv, fmt in (("liquid_fraction_vs_time", 1, 0.0, "{:.5f}"),
+                                 ("mean_pcm_temperature_vs_time", 2, -273.15, "{:.3f}")):
+        cols = []
+        for r in rows:
+            s = r["series"]
+            y = np.interp(t, s[:, 0], s[:, col] + conv)
+            cols.append([fmt.format(v) if s[0, 0] <= x <= s[-1, 0] else "" for x, v in zip(t, y)])
+        with open(os.path.join(outdir, f"{name}.csv"), "w", newline="") as f:
+            w = csv.writer(f)
+            unit = "liquid_fraction" if col == 1 else "T_mean_C"
+            w.writerow(["time_min"] + [f"{r['id']} {unit}" for r in rows])
+            for i, x in enumerate(t):
+                w.writerow([f"{x:.4g}"] + [c[i] for c in cols])
+        print(f"  wrote {name}.csv")
+
+
+def fig_3d_montage(rows, outdir):
+    """liquid_fraction_3d_<t>min.png of every case (rows) and time (columns)."""
+    times = rows[0]["contour_times_min"]
+    grid = [[os.path.join(r["dir"], "post", f"liquid_fraction_3d_{t:g}min.png") for t in times]
+            for r in rows]
+    if not any(os.path.exists(p) for line in grid for p in line):
+        return
+    fig, axes = plt.subplots(len(rows), len(times), squeeze=False,
+                             figsize=(2.6 * len(times), 1.6 * len(rows) + 0.4))
+    for i, (r, line) in enumerate(zip(rows, grid)):
+        for j, (t, path) in enumerate(zip(times, line)):
+            ax = axes[i][j]
+            ax.set_xticks([])
+            ax.set_yticks([])
+            if os.path.exists(path):
+                ax.imshow(plt.imread(path))
+            if i == 0:
+                ax.set_title(f"{t:g} min", fontsize=9)
+            if j == 0:
+                ax.set_ylabel(r["shape"].capitalize(), fontsize=9)
+    fig.suptitle("Liquid fraction (blue solid, red liquid), melting front in grey", fontsize=10)
+    savefig(fig, outdir, "liquid_fraction_3d_montage")
+
+
 def write_table(rows, params, outdir):
     os.makedirs(outdir, exist_ok=True)
-    keys = ["id", "shape", *params, "pcm_mass_g", "exposed_area_cm2", "t80_min", "t100_min",
+    keys = ["id", "shape", *params, "pcm_material", "loads", "pcm_mass_g", "exposed_area_cm2",
+            "t80_min", "t100_min", "final_liquid_fraction",
             "average_melting_rate_g_min", "normalised_rate_g_min_L",
             "normalised_rate_paper_g_min_L", "average_melting_rate_per_area_g_min_cm2"]
     with open(os.path.join(outdir, "summary.csv"), "w", newline="") as f:
@@ -244,7 +313,9 @@ def main():
                           a.study if a.mode == "paper" else f"{a.study}_{a.mode}")
     param = params[0] if params else None
     write_table(rows, params, outdir)
+    write_curves(rows, outdir)
     fig_liquid_fraction(rows, param, outdir)
+    fig_3d_montage(rows, outdir)
     fig_mean_temperature(rows, param, outdir)
     if param:
         fig_melting_bars(rows, param, outdir)

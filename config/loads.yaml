@@ -1,0 +1,53 @@
+# =============================================================================
+# Thermal-load scenarios (`loads:` in base_case.yaml, a study override or --set).
+#
+# loads: none   -- the paper's set-up (Sec. 3.4): room air at T_pcm0 + delta_T,
+#                  adiabatic ceiling, walls and floor.
+# a scenario    -- roof installation. The panel is fixed under the RCC roof slab.
+#                  The slab underside (patch `ceiling`, every region) follows
+#                  T_ceiling(t); the room walls and floor follow T_room(t).
+#                  pcmpipe/loads.py computes both: outdoor weather -> sol-air
+#                  temperature -> 1D transient conduction through the slab
+#                  (periodic steady state). They go into 0/<region>/T as tables
+#                  and into runs/<case>/loads_profile.{csv,png}.
+#                  `python3 -m pcmpipe loads --study <s>` writes only the profile.
+# =============================================================================
+
+kharagpur_roof:
+  id_tag: kgp
+  location: {name: "Kharagpur, West Bengal", lat_deg: 22.33, lon_deg: 87.31, utc_offset_h: 5.5}
+  day_of_year: 135                 # 15 May: pre-monsoon, the hottest month
+  start_clock_h: 6.0               # t = 0 of the CFD run is 06:00 IST
+  duration_h: 24.0                 # length of the boundary tables (held constant after)
+  table_step_min: 10
+  weather:
+    source: synthetic              # synthetic | epw
+    # source: epw uses the hottest day of `epw_month` from an EnergyPlus weather
+    # file, e.g. the ISHRAE/TMYx file for Kolkata or Kharagpur from
+    # https://climate.onebuilding.org (path relative to the repository root)
+    epw_file: null
+    epw_month: 5
+    T_max_C: 38.0                  # [SOURCE] weatherapi.com, Kharagpur May average high
+    T_min_C: 27.0                  # [SOURCE] weatherapi.com, Kharagpur May average low
+    t_Tmax_h: 14.5                 # [ASSUMPTION] clock time of the daily maximum;
+                                   #   the minimum is at sunrise
+    daily_global_horizontal_kWh_m2: 6.80
+                                   # [SOURCE] NASA POWER climatology, May, 22.33 N 87.31 E:
+                                   #   clear-sky 6.80 (design hot day), all-sky mean 5.98
+  roof:
+    absorptance: 0.7               # [ASSUMPTION] weathered grey concrete
+                                   #   (ASHRAE: 0.45 light ... 0.9 dark surfaces)
+    h_out: 17.0                    # [SOURCE] ASHRAE Fundamentals, sol-air temperature [W/m2/K]
+    longwave_correction_K: 3.9     # [SOURCE] ASHRAE: eps*dR/h_out for horizontal surfaces
+    h_in: 6.13                     # [SOURCE] ASHRAE surface film, still air, horizontal,
+                                   #   heat flow downward (convection + radiation) [W/m2/K]
+    layers:                        # outside -> inside; add a weathering course or tiles here
+      - {name: RCC slab, thickness: 0.125, k: 1.40, rho: 2100.0, cp: 840.0}
+                                   # [ASSUMPTION] 125 mm dense cast concrete, no insulation
+                                   #   (typical single-storey PMAY unit); CIBSE-type values
+  room:
+    T_offset_K: 0.0                # [ASSUMPTION] T_room = T_out + offset (ventilated room)
+  initial:
+    T_pcm_C: 24.0                  # [ASSUMPTION] PCM and shell fully solid ("charged") at
+                                   #   06:00. Kharagpur May nights stay above n-octadecane's
+                                   #   solidus, so they do not recharge it -- see README.

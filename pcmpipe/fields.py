@@ -1,11 +1,14 @@
-"""0/<region>/ fields: initial (Eqs. 25-27) and boundary conditions (Sec. 3.4)."""
+"""0/<region>/ fields: initial (Eqs. 25-27) and boundary conditions (Sec. 3.4).
+
+With a loads scenario (config/loads.yaml) the ceiling and the room walls/floor
+follow the tables from pcmpipe/loads.py instead of being adiabatic.
+"""
 from __future__ import annotations
 
 import os
 
-from . import foam
+from . import foam, loads
 from .foam import num
-
 
 
 def _field(path, cls, dims, internal, boundary):
@@ -33,7 +36,31 @@ kappaMethod     {method};
 """
 
 
-def write_fields(case: dict, cdir: str):
+def _table(time_s, T_C, T0):
+    """Prescribed temperature history (Function1 table, held after the last entry)."""
+    return f"""
+type            uniformFixedValue;
+uniformValue    {loads.foam_table(time_s, [v + 273.15 for v in T_C])};
+value           uniform {num(T0)};
+"""
+
+
+def _table_through_layer(time_s, T_C, T0, layer):
+    """Thin-shell mode, PCM on the ceiling: slab temperature behind the ABS top wall."""
+    return f"""
+type            externalWallHeatFluxTemperature;
+mode            coefficient;
+Ta              {loads.foam_table(time_s, [v + 273.15 for v in T_C])};
+h               uniform 1e5;       // contact with the slab; the resistance is the layer
+thicknessLayers ({num(layer[0])});
+kappaLayers     ({num(layer[1])});
+kappaMethod     fluidThermo;
+value           uniform {num(T0)};
+"""
+
+
+def write_fields(case: dict, cdir: str, profile: dict | None = None):
+    """`profile`: loads.profile() of the case's scenario, or None (paper set-up)."""
     ph = case["physics"]
     ic = ph["initial_conditions"]
     wf = ph["air"]["wall_functions"]
@@ -49,8 +76,14 @@ def write_fields(case: dict, cdir: str):
     Ta = ic["T_air"]
     # ".*" comes first: later regexes and exact names override it. It catches the
     # few stray faces snappy can leave on the panel_outer / pcm_cavity patches.
+    roof = []
+    if profile is not None:      # slab underside and room surfaces follow the loads tables
+        t = profile["time_s"]
+        roof = [("ceiling", _table(t, profile["T_ceiling_C"], Ta)),
+                ("(walls|floor)", _table(t, profile["T_room_C"], Ta))]
     _field(os.path.join(d, "T"), "volScalarField", "[0 0 0 1 0 0 0]", f"uniform {num(Ta)}", [
         (".*", "type zeroGradient;"),                     # adiabatic room walls
+        *roof,
         (air_if, _coupled(Ta, "fluidThermo", layer)),
     ])
     _field(os.path.join(d, "U"), "volVectorField", "[0 1 -1 0 0 0 0]", "uniform (0 0 0)", [
@@ -81,8 +114,13 @@ def write_fields(case: dict, cdir: str):
     # ------------------------------------------------------------------ pcm
     d = os.path.join(zero_dir, "pcm")
     Tp = ic["T_pcm"]
+    roof = []
+    if profile is not None and thin:     # PCM reaches the ceiling through the ABS top wall
+        roof = [("ceiling", _table_through_layer(profile["time_s"], profile["T_ceiling_C"],
+                                                 Tp, layer))]
     _field(os.path.join(d, "T"), "volScalarField", "[0 0 0 1 0 0 0]", f"uniform {num(Tp)}", [
         (".*", "type zeroGradient;"),
+        *roof,
         (pcm_if, _coupled(Tp, "fluidThermo", layer)),
     ])
     _field(os.path.join(d, "U"), "volVectorField", "[0 1 -1 0 0 0 0]", "uniform (0 0 0)", [
@@ -101,8 +139,12 @@ def write_fields(case: dict, cdir: str):
     # ---------------------------------------------------------------- shell
     d = os.path.join(zero_dir, "shell")
     Ts = ic["T_shell"]
+    roof = []
+    if profile is not None:
+        roof = [("ceiling", _table(profile["time_s"], profile["T_ceiling_C"], Ts))]
     _field(os.path.join(d, "T"), "volScalarField", "[0 0 0 1 0 0 0]", f"uniform {num(Ts)}", [
         (".*", "type zeroGradient;"),                     # incl. ceiling: adiabatic panel base
+        *roof,                                            #   unless a loads scenario is set
         ("shell_to_air", _coupled(Ts, "solidThermo")),
         ("shell_to_pcm", _coupled(Ts, "solidThermo")),   # Eq. 24 flux continuity
     ])

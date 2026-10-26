@@ -5,6 +5,8 @@ NP ?= 4
 STUDY ?= validation
 # MODE: paper (resolved shell, Sec. 3) | screening (thin-shell resistance, coarse mesh)
 MODE ?= paper
+# SMOKE: smoke (paper set-up) | smoke_roof (n-octadecane, Kharagpur roof loads)
+SMOKE ?= smoke
 IMAGE ?= pcm-panel-pipeline
 
 .PHONY: help test lib smoke study plots docker-build docker-shell docker-test docker-smoke docker-study clean
@@ -18,8 +20,8 @@ test:  ## Python tests: geometry, latent-heat scheme, offline pipeline (no OpenF
 lib:  ## compile the PCM fvOption library (OpenFOAM env required)
 	./openfoam/Allwmake
 
-smoke: lib  ## 2-minute plumbing run: CAD, mesh, solve, post, plots
-	$(PYTHON) -m pcmpipe all --study smoke --mode $(MODE) --np $(NP) --np-mesh $(NP)
+smoke: lib  ## short plumbing run: CAD, mesh, solve, post, plots (SMOKE=smoke_roof: roof loads)
+	$(PYTHON) -m pcmpipe all --study $(SMOKE) --mode $(MODE) --np $(NP) --np-mesh $(NP)
 
 study: lib  ## full study, e.g. make study STUDY=volume MODE=screening NP=8
 	$(PYTHON) -m pcmpipe all --study $(STUDY) --mode $(MODE) --np $(NP) --np-mesh $(NP) --keep-going
@@ -37,7 +39,7 @@ docker-test:  ## Python tests inside the container
 	scripts/docker_run.sh make test
 
 docker-smoke:  ## smoke run inside the container
-	scripts/docker_run.sh make smoke NP=$(NP) MODE=$(MODE)
+	scripts/docker_run.sh make smoke NP=$(NP) MODE=$(MODE) SMOKE=$(SMOKE)
 
 docker-study:  ## full study inside the container, e.g. make docker-study STUDY=validation NP=8
 	scripts/docker_run.sh make study STUDY=$(STUDY) NP=$(NP) MODE=$(MODE)

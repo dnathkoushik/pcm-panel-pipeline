@@ -40,9 +40,10 @@ def make_slice(cfoam, regions, arrays, plane):
     return rd, sl
 
 
-def render(source, array, rng, title, path, view_box, size):
+def render(source, array, rng, title, path, view_box, size, t):
     rv = CreateView("RenderView")
     rv.ViewSize = size
+    rv.ViewTime = t
     rv.OrientationAxesVisibility = 0
     rv.Background = [1, 1, 1]
     d = Show(source, rv)
@@ -104,7 +105,7 @@ def main():
             tag = "T" if arr == "T_C" else "U"
             title = f"{meta['id']}  {label}  t = {t / 60:.0f} min"
             render(calc, arr, rng, title, os.path.join(out, f"contour_{tag}_{t_min:g}min.png"),
-                   view_box, size)
+                   view_box, size, t)
             SaveData(os.path.join(out, f"slice_{tag}_{t_min:g}min.csv"), proxy=calc)
             print(f"  wrote contour_{tag}_{t_min:g}min.png (t = {t:.0f} s)")
 

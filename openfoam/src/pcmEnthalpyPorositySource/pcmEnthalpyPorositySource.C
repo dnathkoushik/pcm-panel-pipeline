@@ -204,7 +204,10 @@ Foam::fv::pcmEnthalpyPorositySource::pcmEnthalpyPorositySource
         "calculated"
     ),
     E0_(mesh.nCells(), Zero),
-    E0TimeIndex_(-1)
+    E0TimeIndex_(-1),
+    kinkLimiter_(true),
+    TLin_(mesh.nCells(), Zero),
+    heLin_(mesh.nCells(), Zero)
 {
     read(dict);
 
@@ -275,6 +278,8 @@ void Foam::fv::pcmEnthalpyPorositySource::addSup
         dimensionedScalar(dimDensity/dimTime, Zero)
     );
 
+    const scalarField& T = thermo.T().primitiveField();
+
     // -d(rho E)/dt with E^{k+1} = E^k + dE/dT (h - h^k)/CpRef  (Euler)
     for (const label celli : cells_)
     {
@@ -283,6 +288,9 @@ void Foam::fv::pcmEnthalpyPorositySource::addSup
           - (rhoNew[celli]*E_[celli] - rhoOld[celli]*E0_[celli])*rDeltaT
           + spc*he[celli];
         Sp[celli] = spc;
+
+        TLin_[celli] = T[celli];
+        heLin_[celli] = he[celli];
     }
 
     eqn += Su;
@@ -334,6 +342,66 @@ void Foam::fv::pcmEnthalpyPorositySource::addSup
 }
 
 
+void Foam::fv::pcmEnthalpyPorositySource::correct(volScalarField& he)
+{
+    if (!kinkLimiter_ || he.name() != energyName_)
+    {
+        return;
+    }
+
+    const basicThermo& thermo =
+        mesh_.lookupObject<basicThermo>(basicThermo::dictName);
+    const tmp<volScalarField> tCp(thermo.Cp());
+    const scalarField& Cp = tCp().primitiveField();
+
+    scalarField& hef = he.primitiveFieldRef();
+
+    // Within tol of a kink a cell moves freely; a limited cell is placed
+    // tol past the kink so the next linearisation sees the new phase
+    const scalar tol = 1e-3*(Tliq_ - Tsol_);
+    const scalar kinks[2] = {Tsol_, Tliq_};
+
+    label nLimited = 0;
+
+    for (const label celli : cells_)
+    {
+        const scalar T0 = TLin_[celli];
+        const scalar Tn = T0 + (hef[celli] - heLin_[celli])/Cp[celli];
+        scalar Tlim = Tn;
+
+        for (const scalar kink : kinks)
+        {
+            if (T0 < kink - tol && Tlim > kink)
+            {
+                Tlim = kink + tol;
+            }
+            else if (T0 > kink + tol && Tlim < kink)
+            {
+                Tlim = kink - tol;
+            }
+        }
+
+        if (Tlim != Tn)
+        {
+            hef[celli] = heLin_[celli] + Cp[celli]*(Tlim - T0);
+            ++nLimited;
+        }
+    }
+
+    if (returnReduce(nLimited, sumOp<label>()))
+    {
+        he.correctBoundaryConditions();
+
+        if (debug)
+        {
+            Info<< "    pcmEnthalpyPorositySource: limited "
+                << returnReduce(nLimited, sumOp<label>())
+                << " cells at the solidus/liquidus" << endl;
+        }
+    }
+}
+
+
 bool Foam::fv::pcmEnthalpyPorositySource::read(const dictionary& dict)
 {
     if (!fv::cellSetOption::read(dict))
@@ -351,6 +419,7 @@ bool Foam::fv::pcmEnthalpyPorositySource::read(const dictionary& dict)
     coeffs_.readEntry("kappaSolid", kappaS_);
     coeffs_.readEntry("kappaLiquid", kappaL_);
     latentConvection_ = coeffs_.getOrDefault<bool>("latentConvection", true);
+    kinkLimiter_ = coeffs_.getOrDefault<bool>("kinkLimiter", true);
     energyName_ = coeffs_.getOrDefault<word>("energyField", "h");
     UName_ = coeffs_.getOrDefault<word>("U", "U");
     phiName_ = coeffs_.getOrDefault<word>("phi", "phi");

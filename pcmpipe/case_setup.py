@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import os
 
-from . import cad, fields, foam, mesh
+from . import cad, config, fields, foam, loads, mesh
 from .foam import num, vec
 
 
@@ -106,6 +106,7 @@ pcmPhaseChange
     kappaSolid      {num(p['k_solid'])};
     kappaLiquid     {num(p['k_liquid'])};
     latentConvection true;                     // div(rho u gamma L) in Eq. 15
+    kinkLimiter     true;                      // outer iterations stop at Tsol/Tliq
 }}
 """)
 
@@ -407,7 +408,15 @@ def case_meta(case: dict) -> dict:
         "id": case["id"], "study": case.get("study"), "shape": geo.shape,
         "volume_ml": geo.volume_ml, "protrusion_ratio": geo.protrusion_ratio,
         "shell_thickness_mm": geo.shell_thickness, "gap_mm": geo.gap,
-        "delta_T": case["delta_T"], "mesh_preset": case["mesh"]["preset"],
+        "delta_T": None if config.loads_active(case) else case["delta_T"],
+        "mesh_preset": case["mesh"]["preset"],
+        "pcm_material": case.get("pcm_material") or "paper_cla",
+        "loads": case.get("loads") if config.loads_active(case) else None,
+        "start_clock_h": (case["loads_spec"]["start_clock_h"] if config.loads_active(case)
+                          else None),
+        "T_melt": case["physics"]["pcm"]["T_pc"],
+        "T_solidus": case["physics"]["pcm"]["T_solidus"],
+        "T_liquidus": case["physics"]["pcm"]["T_liquidus"],
         "T_pcm0": case["physics"]["initial_conditions"]["T_pcm"],
         "T_air": case["physics"]["initial_conditions"]["T_air"],
         "probes": geo.probes, "slice_plane": geo.slice_plane,
@@ -436,9 +445,11 @@ def case_meta(case: dict) -> dict:
 def build(case: dict):
     cdir = os.path.join(case["dir"], "case")
     meta = case_meta(case)
+    profile = (loads.write_profile(case, case["dir"], config.ROOT)
+               if config.loads_active(case) else None)
     write_constant(case, cdir)
     write_system(case, cdir, meta)
-    fields.write_fields(case, cdir)
+    fields.write_fields(case, cdir, profile)
     with open(os.path.join(case["dir"], "case_meta.json"), "w") as f:
         json.dump(meta, f, indent=2)
     open(os.path.join(cdir, "case.foam"), "w").close()   # ParaView reader handle

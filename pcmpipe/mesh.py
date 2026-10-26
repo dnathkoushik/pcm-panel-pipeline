@@ -8,9 +8,10 @@ Workflow inside runs/<case>/case:
   splitMeshRegions -cellZones -overwrite
                             constant/{air,shell,pcm}/polyMesh with conformal
                             mappedWall patches air_to_shell, shell_to_pcm, ...
-  refineWallLayer           wall-normal "inflation" layers on the fluid side of
-                            both interfaces. Interface faces are not split, so
-                            the conformal coupling survives.
+  refineWallLayer           optional wall-normal "inflation" layers on the fluid
+                            side of both interfaces (mesh.wall_layer_passes, off
+                            by default: see base_case.yaml). Interface faces are
+                            not split, so the conformal coupling survives.
   checkMesh -region <r>
 The shell is resolved with >= `shell_cells_across` (at least 2) cells through its
 thickness. With a single cell, one cell-to-cell step can cross both surfaces and
@@ -320,8 +321,9 @@ def build(case: dict, n_procs: int = 1, dry: bool = False) -> dict:
         shutil.rmtree(os.path.join(cdir, "constant", "polyMesh"), ignore_errors=True)
 
     m = case["mesh"]
+    passes = m["active"].get("wall_layer_passes") or {}
     for region, patch in fluid_interfaces(case).items():
-        _refine_wall_layers(cdir, region, patch, m["active"]["wall_layer_passes"][region],
+        _refine_wall_layers(cdir, region, patch, passes.get(region, 0),
                             m["wall_layer_edge_fraction"], dry)
     for r in regions(case):
         foam.run(["checkMesh", "-region", r, "-constant"], cdir, log=f"checkMesh.{r}", dry=dry)

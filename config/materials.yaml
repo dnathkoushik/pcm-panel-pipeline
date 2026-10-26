@@ -1,0 +1,36 @@
+# =============================================================================
+# PCM materials. `pcm_material` (base_case.yaml, a study override or --set)
+# picks one entry; its keys replace those in physics.yaml -> pcm, and its
+# `solver` block replaces keys in physics.yaml -> solver. Keys not given here
+# (A_mush, eps_mush, flow) keep the paper's values. Tags as in physics.yaml,
+# plus [SOURCE] = taken from the reference named in `source`.
+# =============================================================================
+
+paper_cla:                         # Yang et al. 2023: capric:lauric + oleic acid
+  id_tag: ""                       #   (physics.yaml values, case ids unchanged)
+
+n_octadecane:                      # pure paraffin C18H38, melts at 28 C
+  id_tag: c18
+  source: >-
+    Faden, Hoehlein, Wanner, Weiss, Vidi (2019), Review of thermophysical property
+    data of octadecane for phase-change studies, Materials 12(18) 2974,
+    doi:10.3390/ma12182974 -- recommended correlations, evaluated at Tm or 305 K
+  T_pc: 301.13                     # [SOURCE] melting temperature (27.98 C)
+  T_solidus: 300.63                # [ASSUMPTION] Tm -/+ 0.5 K. A pure substance melts at
+  T_liquidus: 301.63               #   one temperature; the enthalpy-porosity model needs a
+                                   #   band. The fvOption's kink limiter keeps 1 K stable.
+  latent_heat: 236980.0            # [SOURCE] 236.98 J/g
+  rho: 776.9                       # [SOURCE] liquid at Tm, 979.826 - 0.674 T; Boussinesq rho0
+  rho_solid: 867.9                 # [SOURCE] least certain value of the review. NOT used: the
+                                   #   Boussinesq model has one density (no shrinkage void)
+  k_liquid: 0.152                  # [SOURCE] 0.246 - 3.121e-4 T at Tm
+  k_solid: 0.334                   # [SOURCE]
+  cp_liquid: 2230.0                # [SOURCE] 3.247 - 8.861e-3 T + 1.821e-5 T^2 (J/g/K) at Tm
+  cp_solid: 1921.0                 # [SOURCE] -1.029 + 9.797e-3 T (J/g/K) at Tm
+  mu: 3.63e-3                      # [SOURCE] exp(-5.353 + 2026.013/T) mPa s at 305 K
+  beta: 8.7e-4                     # [SOURCE] 0.674/776.9: slope of the liquid density
+  T_ref: 301.13                    # Boussinesq reference = Tm (rho0 is the density there)
+  molWeight: 254.5                 # C18H38 (unused by the Boussinesq EoS)
+  solver:
+    nOuterCorrectors: 3            # tests/test_latent_source_1d.py (Octadecane): 1 K band,
+    maxDeltaT: 0.5                 #   dt 0.5 s with the kink limiter; dt 2 s diverges

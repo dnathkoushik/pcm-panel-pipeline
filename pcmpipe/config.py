@@ -6,6 +6,7 @@ import itertools
 import json
 import os
 
+import numpy as np
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -31,11 +32,18 @@ def get_dotted(d: dict, key: str):
     return d
 
 
+def loads_active(case: dict) -> bool:
+    return case.get("loads") not in (None, "none")
+
+
 def case_id(case: dict) -> str:
     p = case["panel"]
     tag = {"pyramid": "pyr", "tetrahedron": "tet", "hemisphere": "hem"}[p["shape"]]
     cid = (f"{tag}_V{p['volume_ml']:g}_r{round(100 * p['protrusion_ratio'])}"
-           f"_t{p['shell_thickness_mm']:g}_g{p['gap_mm']:g}_dT{case['delta_T']:g}")
+           f"_t{p['shell_thickness_mm']:g}_g{p['gap_mm']:g}")
+    cid += f"_{case['loads_spec']['id_tag']}" if loads_active(case) else f"_dT{case['delta_T']:g}"
+    if case.get("material_tag"):
+        cid += f"_{case['material_tag']}"
     if case["mesh"]["preset"] != "medium":
         cid += f"_{case['mesh']['preset']}"
     if case.get("model", {}).get("shell") == "thin" and case["mesh"]["preset"] != "screen":
@@ -45,13 +53,47 @@ def case_id(case: dict) -> str:
     return cid
 
 
-def resolve(case: dict) -> dict:
-    """Fill derived values (mesh preset, air temperature) in place."""
-    case["mesh"]["active"] = copy.deepcopy(case["mesh"]["presets"][case["mesh"]["preset"]])
+def apply_material(case: dict):
+    """pcm_material (config/materials.yaml) -> physics.pcm and physics.solver."""
+    name = case.get("pcm_material") or "paper_cla"
+    mats = _load("materials.yaml")
+    if name not in mats:
+        raise KeyError(f"unknown pcm_material '{name}', choose from {list(mats)}")
+    mat = copy.deepcopy(mats[name] or {})
+    case["material_tag"] = mat.pop("id_tag", "")
+    case["physics"]["solver"].update(mat.pop("solver", {}))
+    case["physics"]["pcm"].update(mat)
+
+
+def apply_loads(case: dict):
+    """loads (config/loads.yaml): roof scenario initial temperatures; else the paper's."""
     ic = case["physics"]["initial_conditions"]
-    ic["T_air"] = ic["T_pcm"] + float(case["delta_T"])
     air = case["physics"]["air"]
-    air["T_ref"] = ic["T_air"]                     # Boussinesq reference, Eq. 17
+    if not loads_active(case):
+        case["loads_spec"] = None
+        ic["T_air"] = ic["T_pcm"] + float(case["delta_T"])
+        air["T_ref"] = ic["T_air"]                 # Boussinesq reference, Eq. 17
+        return
+    from . import loads                            # numpy only
+    specs = _load("loads.yaml")
+    if case["loads"] not in specs:
+        raise KeyError(f"unknown loads '{case['loads']}', choose from {list(specs)}")
+    spec = case["loads_spec"] = copy.deepcopy(specs[case["loads"]])
+    start = spec["start_clock_h"]
+    T_room = loads.room_temperature_C(spec, start + np.arange(0.0, 24.0, 0.25), ROOT)
+    ic["T_pcm"] = ic["T_shell"] = spec["initial"]["T_pcm_C"] + 273.15
+    ic["T_air"] = float(T_room[0]) + 273.15
+    air["T_ref"] = float(np.mean(T_room)) + 273.15  # middle of the day's air temperatures
+
+
+def resolve(case: dict) -> dict:
+    """Fill derived values (material, loads, mesh preset, air temperature) in place."""
+    case["mesh"]["active"] = copy.deepcopy(case["mesh"]["presets"][case["mesh"]["preset"]])
+    if case["mesh"].get("wall_layer_passes") is not None:   # one switch for every preset
+        case["mesh"]["active"]["wall_layer_passes"] = case["mesh"]["wall_layer_passes"]
+    apply_material(case)
+    apply_loads(case)
+    air = case["physics"]["air"]
     if air["beta"] == "auto":
         air["beta"] = 1.0 / air["T_ref"]
     case["id"] = case_id(case)
@@ -73,8 +115,19 @@ def mode_names():
     return list(_load("base_case.yaml").get("modes", {"paper": {}}).keys())
 
 
-def expand_study(name: str, mode: str = "paper") -> list[dict]:
-    """Cases of a study. Overrides apply in the order: mode, study override, vary."""
+def parse_sets(items) -> list:
+    """--set key=value (value parsed as YAML: 0.5, [1, 2], {air: 0, pcm: 0}, none)."""
+    out = []
+    for item in items or []:
+        key, sep, value = item.partition("=")
+        if not sep or not key:
+            raise ValueError(f"--set expects key=value, got '{item}'")
+        out.append((key.strip(), yaml.safe_load(value)))
+    return out
+
+
+def expand_study(name: str, mode: str = "paper", sets=None) -> list[dict]:
+    """Cases of a study. Overrides apply in the order: mode, study override, vary, --set."""
     studies = _load("studies.yaml")
     if name not in studies:
         raise KeyError(f"unknown study '{name}', choose from {list(studies)}")
@@ -90,9 +143,11 @@ def expand_study(name: str, mode: str = "paper") -> list[dict]:
         case["mode"] = mode
         for k, v in spec.get("override", {}).items():
             set_dotted(case, k, v)
-        if spec.get("override"):
+        if spec.get("override") and spec.get("id_suffix", True):
             case["id_suffix"] = name
         for k, v in zip(keys, combo):
+            set_dotted(case, k, v)
+        for k, v in sets or []:
             set_dotted(case, k, v)
         case["study"] = name
         cases.append(resolve(case))

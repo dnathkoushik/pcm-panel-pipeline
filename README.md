@@ -30,6 +30,8 @@ pcm_panel_pipeline/
 ├── config/
 │   ├── physics.yaml          # paper ground truth; every value tagged [PAPER]/[ASSUMPTION]/[INTERPRET]
 │   ├── base_case.yaml        # panel defaults, mesh presets, run and post settings, tool paths
+│   ├── materials.yaml        # PCMs: paper_cla (the paper's), n_octadecane (Faden et al. 2019)
+│   ├── loads.yaml            # thermal loads: none (paper set-up) | kharagpur_roof
 │   └── studies.yaml          # parametric studies (cartesian products of overrides)
 ├── pcmpipe/                  # Python driver:  python3 -m pcmpipe <step> --study <name>
 │   ├── __main__.py           # CLI
@@ -39,6 +41,7 @@ pcm_panel_pipeline/
 │   ├── mesh.py               # blockMesh/snappyHexMesh dictionaries + meshing sequence
 │   ├── case_setup.py         # constant/ and system/ for air | shell | pcm
 │   ├── fields.py             # 0/ initial and boundary conditions
+│   ├── loads.py              # sol-air temperature + 1D roof slab -> ceiling/room T(t) tables
 │   ├── run.py                # decomposePar, mpirun chtMultiRegionFoam, reconstructPar
 │   ├── results.py            # melting times, rates, normalised rates
 │   └── foam.py               # dictionary writer, command runner
@@ -48,12 +51,14 @@ pcm_panel_pipeline/
 │   └── src/pcmEnthalpyPorositySource/   # enthalpy-porosity fvOption (Eqs. 1, 15, 18-21)
 ├── post/
 │   ├── pv_contours.py        # pvpython: T and |U| contours at 50/150/250/300 min (Fig. 9)
+│   ├── pv_liquid_fraction_3d.py # pvpython: 3D cut-away liquid fraction + melting front
 │   ├── pv_extract_transient.py  # pvpython: liquid fraction / mean T for every written time
 │   └── plot_results.py       # paper-style figures (Figs. 8, 10-13, 15, 17, 18)
 ├── validation/paper_reference.json   # numbers quoted in the paper, overlaid on plots
 ├── tests/
 │   ├── test_geometry.py      # geometry solver vs. the paper's Table 3, Sec. 4.5, Sec. 4.7
-│   ├── test_latent_source_1d.py  # latent-heat formulation vs. converged enthalpy method
+│   ├── test_latent_source_1d.py  # latent-heat formulation (incl. n-octadecane) vs. reference
+│   ├── test_loads.py         # roof loads model, materials, --set overrides
 │   └── test_pipeline_offline.py  # every study: dictionaries, results, plots (no OpenFOAM)
 ├── scripts/
 │   ├── docker_run.sh         # run anything inside the container (Linux/macOS/Windows)
@@ -244,6 +249,8 @@ make study STUDY=validation NP=8                 # paper mode: compare with the 
 | `volume` | 250, 500, 750 mL | Sec. 4.7 | melting time + normalised melting rate (Fig. 18) |
 | `mesh_independence` | coarse / medium / fine | Sec. 3.5 | Fig. 7 |
 | `smoke` | smoke mesh, 2 min | | plumbing test |
+| `octadecane_roof` | pyramid, tetrahedron, hemisphere | new | n-octadecane under a Kharagpur roof (section 3b) |
+| `smoke_roof` | smoke mesh | | plumbing test of the roof set-up |
 
 To add a design, add a study to `studies.yaml`. Any key in `base_case.yaml` can be
 varied with a dotted path, for example `panel.n_x`, `panel.hemisphere_fill` or `mesh.preset`.
@@ -257,6 +264,11 @@ varied with a dotted path, for example `panel.n_x`, `panel.hemisphere_fill` or `
   - `normalised_rate_{physical,paper}.png` (volume study)
   - `liquid_fraction_and_rate.png` and `probe_temperatures.png` (validation and shapes studies)
   - `summary.csv`
+  - `liquid_fraction_vs_time.csv`, `mean_pcm_temperature_vs_time.csv`: every case's curve
+    on one time axis (one column per case, temperature in °C)
+  - `liquid_fraction_3d_montage.png`: the 3D views below, one row per case
+- `runs/<case>/post/liquid_fraction_3d_<t>min.png`: PCM cut on the symmetry plane,
+  coloured by liquid fraction (blue solid, red liquid), melting front (γ = 0.5) in grey.
 - `runs/<case>/post/contour_{T,U}_<t>min.png`: symmetry-plane contours (paper Fig. 9),
   on the paper's colour ranges (14–25 °C, 0–22.8 mm/s), plus `slice_*.csv`.
 - `runs/<case>/case/postProcessing/`: liquid fraction and mean PCM temperature every 30 s,
@@ -269,6 +281,117 @@ For example, 170 g / 430 min / 0.5 L = 0.79, which matches the published 0.786.
 `normalised_rate_physical.png` uses the PCM mass actually in each panel.
 `normalised_rate_paper.png` reproduces the paper's convention for comparison.
 
+## 3b. n-octadecane panels under a Kharagpur roof (PMAY retrofit)
+
+Same panels and solver, two switches (both in `config/`):
+
+```yaml
+pcm_material: n_octadecane    # materials.yaml (paper_cla = the paper's PCM)
+loads: kharagpur_roof         # loads.yaml (none = the paper's ΔT set-up)
+```
+
+The `octadecane_roof` study sets both for the three shapes. It starts at 06:00 and runs
+until the PCM is melted or 18:00, whichever comes first:
+
+```bash
+# boundary conditions only (no OpenFOAM): runs/<case>/loads_profile.{csv,png}
+python3 -m pcmpipe loads --study octadecane_roof
+# 16 GB laptop, 4 cores: screening mode (~85-200k cells, thin-shell resistance)
+make docker-study STUDY=octadecane_roof MODE=screening NP=4
+# workstation: paper mode (resolved 1 mm ABS shell, ~1.2 M cells)
+make docker-study STUDY=octadecane_roof MODE=paper NP=16
+# any setting for one call, e.g.:
+python3 -m pcmpipe all --study octadecane_roof --mode screening --np 4 \
+    --set "mesh.wall_layer_passes={air: 0, pcm: 0}" --set run.max_end_time_min=480
+```
+
+**Material** (`materials.yaml`). Values are from Faden et al. 2019, *Materials* 12, 2974:
+the recommended correlations, evaluated at T_m or 305 K.
+
+| | value | | value |
+|---|---|---|---|
+| T_m | 301.13 K (28.0 °C) | latent heat | 236.98 kJ/kg |
+| solidus / liquidus | 300.63 / 301.63 K (T_m ∓ 0.5 K, model band) | ρ liquid (Boussinesq ρ0) | 776.9 kg/m³ |
+| cp solid / liquid | 1921 / 2230 J/(kg K) | k solid / liquid | 0.334 / 0.152 W/(m K) |
+| μ (305 K) | 3.63 mPa s | β | 8.7e-4 1/K |
+
+These go into the same dictionaries as the paper's PCM:
+
+```
+// constant/pcm/thermophysicalProperties
+mixture
+{
+    specie          { molWeight 254.5; }
+    equationOfState { rho0 776.9; T0 301.13; beta 0.00087; }
+    thermodynamics  { Cp 2230; Hf 0; }              // liquid cp; the fvOption restores the rest
+    transport       { mu 0.00363; Pr 53.26; }
+}
+// constant/pcm/fvOptions
+pcmPhaseChange
+{
+    type pcmEnthalpyPorositySource;  selectionMode all;  energyField h;
+    Tsolidus 300.63;  Tliquidus 301.63;  L 236980;  Amush 1e+06;  epsilon 0.001;
+    CpSolid 1921;  CpLiquid 2230;  kappaSolid 0.334;  kappaLiquid 0.152;
+    latentConvection true;  kinkLimiter true;
+}
+```
+
+The solid is 12 % denser than the liquid (867.9 kg/m³, the least certain value in the
+review). The Boussinesq model has one density, so shrinkage voids are not modelled.
+
+**Loads** (`loads.yaml` → `pcmpipe/loads.py`). The panel is fixed under an uninsulated
+125 mm RCC roof slab:
+- **Day.** 15 May, from 06:00 IST.
+- **Outdoor air.** 27–38 °C (Kharagpur May mean low/high, weatherapi.com), lowest at
+  sunrise and highest at 14:30.
+- **Solar.** Clear-sky global horizontal irradiation 6.80 kWh/m²/day (NASA POWER
+  climatology; all-sky 5.98), spread as a half-sine from sunrise to sunset.
+- **Sol-air temperature.** T_sa = T_out + αI/h_o − 3.9 K, with α = 0.7 and h_o = 17 W/(m² K)
+  (ASHRAE).
+- **Slab.** 1D transient conduction through the slab (k 1.40, ρ 2100, cp 840), with
+  h_i = 6.13 W/(m² K) to the room, repeated until the day is periodic.
+
+The result for this design day:
+
+| | range |
+|---|---|
+| roof top (sol-air) | 23–66 °C |
+| ceiling = slab underside | 26.8 °C at 06:00 → 47.7 °C at ~15:45 (3.5 h after the sol-air peak) |
+| room air, walls, floor | 27–38 °C (ventilated room: T_room = T_out) |
+
+In the CFD these become tables on the top and bottom of the component:
+
+```
+// 0/shell/T (paper mode) and 0/air/T: slab underside
+ceiling        { type uniformFixedValue;  uniformValue table ((0 299.98) (600 299.99) ... (86400 299.98)); }
+// 0/air/T: the room around the panel
+"(walls|floor)" { type uniformFixedValue;  uniformValue table ((0 300.41) ...); }
+// 0/pcm/T (screening mode: PCM up to the ceiling behind the 1 mm ABS top wall)
+ceiling        { type externalWallHeatFluxTemperature;  mode coefficient;  Ta table (...);
+                 h uniform 1e5;  thicknessLayers (0.001);  kappaLayers (0.163);  kappaMethod fluidThermo; }
+```
+
+The PCM and shell start solid at 24 °C; the room air starts at T_room(06:00). For a
+constant load instead, set `weather.T_max_C` = `T_min_C` and
+`daily_global_horizontal_kWh_m2: 0`. For measured weather, give an EPW file
+(`weather.source: epw`, e.g. the ISHRAE/TMYx Kolkata file from climate.onebuilding.org).
+
+**Caveats:**
+- **Night-time recharge.** Kharagpur May nights stay at or above about 27 °C, so the room
+  is below n-octadecane's solidus (27.5 °C) for only about 3 h a day. Without night
+  ventilation or cooling the PCM would not re-solidify, and a second hot day would find
+  it already liquid. The 06:00 "charged" start is therefore an assumption, and
+  `pcmpipe loads` warns about it.
+- **Contact.** The panel is assumed to be in perfect thermal contact with the slab.
+- **Slab properties.** The slab values are generic dense concrete; replace them with the
+  house's construction (add a weathering course or tiles as extra `layers`).
+
+**Outputs**, in `runs/_figures/octadecane_roof[_screening]/`:
+- `liquid_fraction_vs_time.csv` and `liquid_fraction_curves.png`
+- `mean_pcm_temperature_vs_time.csv` and `mean_pcm_temperature.png`, with the melting range marked
+- `liquid_fraction_3d_montage.png`
+- per case: `runs/<case>/post/liquid_fraction_3d_<t>min.png`
+
 ## 4. How the paper's model maps to OpenFOAM
 
 | Paper | OpenFOAM implementation |
@@ -280,7 +403,7 @@ For example, 170 g / 430 min / 0.5 L = 0.79, which matches the published 0.786.
 | Liquid fraction, Eq. 1; H = h_sen + γL, Eqs. 18–20; properties linear in the mushy zone | `pcmEnthalpyPorositySource` fvOption (see below) |
 | Mushy-zone sink, Eq. 21: A_mush = 1e6, ε = 0.001 | same fvOption, implicit `fvm::Sp` sink |
 | Interfaces, Eq. 24: flux continuity, u = 0 | `compressible::turbulentTemperatureCoupledBaffleMixed` on conformal `mappedWall` patches, `noSlip` |
-| Adiabatic room walls, adiabatic panel base | `zeroGradient` T on `floor/ceiling/walls`; shell `ceiling` patch adiabatic |
+| Adiabatic room walls, adiabatic panel base | `zeroGradient` T on `floor/ceiling/walls`; shell `ceiling` patch adiabatic (`loads: none`; section 3b has the roof set-up) |
 | Initial conditions, Eqs. 25–27 | 0/: T_PCM = T_shell = 278.15 K, T_air = 278.15 + ΔT, k = 0.3, ε = 0.5 |
 | SIMPLE, second-order upwind, Δt = 0.5 s | PIMPLE (transient CHT), `Gauss linearUpwind`, `deltaT 0.5`, `maxDeltaT 0.5`, `adjustTimeStep` (maxCo 4, maxDi 10) |
 | Residuals 1e-6 (energy), 1e-3 (others) | linear-solver absolute tolerances: h 1e-6; U, k, ε 1e-3 (p_rgh 1e-6, see below) |
@@ -304,6 +427,16 @@ heat. `tests/test_latent_source_1d.py` runs the same scheme in 1D against a full
 converged enthalpy solution:
 - with 2 outer correctors the liquid fraction matches to 4 decimals, with 0.000 % energy error
 - with 1 corrector the liquid fraction is within 0.7 %
+
+**Kink limiter.** Newton on the piecewise-linear E(T) overshoots when a cell crosses the
+solidus or liquidus in one iteration. With the paper's 7 K band this is harmless. For a
+pure PCM such as n-octadecane (1 K band, twice the latent heat) plain Newton oscillates:
+in the 1D test the stored energy comes out 22.5 % too high. After each energy solve the
+fvOption (`correct()`) therefore stops an update that would jump across Tsolidus or
+Tliquidus just past the kink, and the next outer corrector re-linearises in the new phase.
+With 3 outer correctors and Δt = 0.5 s the n-octadecane error is 0.0003 in liquid fraction
+and 0.003 % in energy (the `Octadecane` tests); the paper case is unchanged.
+`kinkLimiter false;` in `constant/pcm/fvOptions` switches it off.
 
 The excess conductivity is zero on the interface faces, so the coupled heat flux uses
 k_ref = k_liquid. The PCM next to the shell melts first, so this is exact after the first
@@ -338,28 +471,32 @@ The paper does not give these values. Each one is a single line to change.
 - FreeCAD builds valid, watertight panels. For the 250 mL pyramid the cavity is 217.2 mL,
   giving 182.4 g of PCM.
 - snappyHexMesh produces the three regions with conformal interfaces (smoke preset: air 447k,
-  shell 266k, PCM 514k cells); `refineWallLayer` and `checkMesh` pass.
-- `chtMultiRegionFoam` runs stably with the fvOption active: 182 steps to t = 0.6 s in CI,
-  about 9.5 s per step on 2 cores at 1.2 M cells.
+  shell 266k, PCM 514k cells; screening smoke: air 49k, PCM 36k).
+- Screening mode: `chtMultiRegionFoam` runs the 0.6 s smoke run to the end.
 
 **Known issues** (open):
-1. **Temperature undershoot in the PCM (paper mode).** One interior PCM cell drifts below
-   the initial temperature: −0.13 K at 0.6 s, −12 K at 3.5 s. The phase-change source
-   reduces exactly to the correct heat capacity in solid PCM, so the suspect is a distorted
-   cell at a refinement transition (checkMesh reports 4 highly skewed PCM faces). The
-   `pcmTMinMax` monitor prints the location
-   (`postProcessing/pcm/pcmTMinMax/0/fieldMinMax.dat`). **Do not trust paper-mode results
-   until this is resolved.**
+1. **Temperature undershoot in the PCM.** Seen in both modes with `refineWallLayer` active:
+   - Paper mode: one interior PCM cell drifted below the initial temperature (−0.13 K at
+     0.6 s, −12 K at 3.5 s), and a later run crashed on its second step.
+   - Screening mode: one PCM cell next to the ceiling reached 248 K at 0.5 s.
+
+   Wall layers are now off by default and the fvOption has the kink limiter. Check
+   `postProcessing/pcm/pcmTMinMax/0/fieldMinMax.dat` (minimum and its location) of the CI
+   smoke runs before trusting results. **Until the minimum stays at the initial PCM
+   temperature, treat CFD numbers as provisional.**
 2. **Cost of paper mode.** The 0.5 mm shell cells cap the time step at about 0.015 s, against
    the paper's 0.5 s. Use screening mode for design studies (section 3).
 3. The medium/fine presets are larger than the paper's 1.1 M cells, because the smoke preset
    alone is already 1.2 M. Check `log.checkMesh.*` and tune `config/base_case.yaml`.
 
 **Limitations:**
-- Inflation layers are made by splitting the wall-adjacent cells (`refineWallLayer`) after
-  `splitMeshRegions`. This keeps the region interfaces conformal.
-- The solver uses PIMPLE with 2 outer correctors, which is fine for the latent heat
-  (see the verification test). `residualControl` is not used because its syntax differs
+- Inflation layers are **off in every preset**. They are made with `refineWallLayer` after
+  `splitMeshRegions`, which keeps the interfaces conformal, but on these geometries the
+  split cells come out crushed. In CI the paper-mode smoke run (1 pass) had 2 highly
+  skewed PCM faces and stopped after two time steps with "Negative initial temperature"
+  from the Boussinesq thermo. Re-enable with `--set "mesh.wall_layer_passes={air: 1, pcm: 1}"`.
+- The solver uses PIMPLE with 2 outer correctors for the paper's PCM and 3 for n-octadecane
+  (`solver` block in `materials.yaml`), as the verification tests require. `residualControl` is not used because its syntax differs
   between releases; `solverInfo` logs the residuals.
 - The paper's hanging-distance study (Sec. 4.4) is not included.
 - Native macOS (OpenFOAM.app, Apple Clang) is not covered by CI; Docker is.

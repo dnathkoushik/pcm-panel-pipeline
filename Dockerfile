@@ -26,10 +26,13 @@ RUN apt-get update \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
         "openfoam${OF_VERSION}-default" \
-        freecad paraview xvfb xauth \
+        freecad paraview python3-paraview xvfb xauth \
         python3 python3-numpy python3-matplotlib python3-yaml \
         make \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* \
+ && echo "pvpython: $(command -v pvpython || echo MISSING)"
+# Ubuntu's `paraview` package is the GUI; pvpython (the ParaView Python
+# interpreter that runs post/pv_*.py) comes with python3-paraview
 
 # Let any host uid (docker run --user) get a passwd entry; Open MPI and
 # OpenFOAM look the user up.

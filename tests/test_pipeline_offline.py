@@ -105,6 +105,38 @@ class OfflinePipeline(unittest.TestCase):
                     "volume/normalised_rate_physical.png", "volume/summary.csv"):
             self.assertTrue(os.path.isfile(os.path.join(figs, rel)), rel)
 
+    def test_3_roof_scenario(self):
+        for mode in ("paper", "screening"):
+            self.pcmpipe("setup", "--study", "octadecane_roof", "--mode", mode)
+        case = os.path.join(self.tmp.name, "pyr_V250_r50_t1_g0_kgp_c18_screen")
+        with open(os.path.join(case, "case", "0", "pcm", "T")) as f:
+            self.assertIn("externalWallHeatFluxTemperature", f.read())   # PCM under the slab
+        with open(os.path.join(case, "case", "0", "air", "T")) as f:
+            T = f.read()
+        self.assertIn('"(walls|floor)"', T)
+        self.assertIn("uniformValue    table ((0 ", T)
+        with open(os.path.join(case, "case", "constant", "pcm", "fvOptions")) as f:
+            fvo = f.read()
+        self.assertIn("kinkLimiter     true;", fvo)
+        self.assertIn("Tsolidus        300.63;", fvo)
+        self.assertTrue(os.path.isfile(os.path.join(case, "loads_profile.csv")))
+        with open(os.path.join(self.tmp.name, "pyr_V250_r50_t1_g0_kgp_c18", "case", "0",
+                               "shell", "T")) as f:
+            self.assertIn("ceiling", f.read())                            # resolved shell
+
+        for d in os.listdir(self.tmp.name):
+            if d.endswith("_kgp_c18_screen"):
+                fake_function_objects(os.path.join(self.tmp.name, d), T100_MIN[d[:3]])
+        self.pcmpipe("results", "--study", "octadecane_roof", "--mode", "screening")
+        self.pcmpipe("plots", "--study", "octadecane_roof", "--mode", "screening")
+        figs = os.path.join(self.tmp.name, "_figures", "octadecane_roof_screening")
+        for rel in ("liquid_fraction_vs_time.csv", "mean_pcm_temperature_vs_time.csv",
+                    "liquid_fraction_curves.png", "mean_pcm_temperature.png"):
+            self.assertTrue(os.path.isfile(os.path.join(figs, rel)), rel)
+        with open(os.path.join(figs, "liquid_fraction_vs_time.csv")) as f:
+            header = f.readline().strip().split(",")
+        self.assertEqual(len(header), 4)          # time + pyramid, tetrahedron, hemisphere
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

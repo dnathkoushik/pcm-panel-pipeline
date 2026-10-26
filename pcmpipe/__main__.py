@@ -1,6 +1,15 @@
 """Command line:  python -m pcmpipe <step> --study <name> [options]
 
-Steps: list | cad | mesh | setup | run | results | post | plots | all
+Steps: list | cad | mesh | setup | run | results | post | plots | loads | all
+
+  loads   write only the roof boundary-condition profile (CSV + PNG) of each case
+          (needs no OpenFOAM; cases without a loads scenario are skipped)
+
+Any configuration key can be overridden for one call, e.g. on a 16 GB laptop:
+  python3 -m pcmpipe all --study octadecane_roof --mode screening --np 4 \\
+      --set "mesh.wall_layer_passes={air: 0, pcm: 0}" --set run.max_end_time_min=600
+--set does not change the case folder name: use it for settings that do not
+change the physics, or remove the old runs/<case> first.
 """
 from __future__ import annotations
 
@@ -11,7 +20,7 @@ import subprocess
 import sys
 import traceback
 
-from . import cad, case_setup, config, foam, mesh, results, run
+from . import cad, case_setup, config, foam, loads, mesh, results, run
 
 POST_DIR = os.path.join(config.ROOT, "post")
 
@@ -19,7 +28,9 @@ POST_DIR = os.path.join(config.ROOT, "post")
 def pv_post(case: dict, dry: bool):
     exe = foam.tool(case, "pvpython")
     times = [str(t) for t in case["post"]["contour_times_min"]]
-    for script, extra in (("pv_contours.py", ["--times", *times]), ("pv_extract_transient.py", [])):
+    for script, extra in (("pv_contours.py", ["--times", *times]),
+                          ("pv_liquid_fraction_3d.py", ["--times", *times]),
+                          ("pv_extract_transient.py", [])):
         cmd = [*exe, os.path.join(POST_DIR, script), case["dir"], *extra]
         print("  " + " ".join(cmd))
         if not dry:
@@ -30,7 +41,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="pcmpipe", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("step", choices=["list", "cad", "mesh", "setup", "run", "results",
-                                     "post", "plots", "all"])
+                                     "post", "plots", "loads", "all"])
     ap.add_argument("--study", default="validation", help="study name from config/studies.yaml")
     ap.add_argument("--mode", default="paper", choices=config.mode_names(),
                     help="paper: resolved shell (Sec. 3); screening: thin shell, coarse mesh")
@@ -39,22 +50,35 @@ def main(argv=None):
     ap.add_argument("--np-mesh", type=int, default=1, help="MPI ranks for snappyHexMesh")
     ap.add_argument("--dry-run", action="store_true", help="write files, print commands only")
     ap.add_argument("--keep-going", action="store_true", help="continue after a failed case")
+    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                    help="override a config key (dotted path, YAML value); repeatable")
     a = ap.parse_args(argv)
+    sets = config.parse_sets(a.set)
 
     if a.step == "list":
         for s in config.study_names():
             print(f"{s}:")
-            for c in config.expand_study(s, a.mode):
+            for c in config.expand_study(s, a.mode, sets):
                 print(f"    {c['id']}")
         return 0
 
-    cases = [c for c in config.expand_study(a.study, a.mode) if not a.case or a.case in c["id"]]
+    cases = [c for c in config.expand_study(a.study, a.mode, sets)
+             if not a.case or a.case in c["id"]]
     if not cases:
         sys.exit("no matching cases")
 
     if a.step == "plots":
         return subprocess.call([sys.executable, os.path.join(POST_DIR, "plot_results.py"),
                                 "--study", a.study, "--mode", a.mode])
+
+    if a.step == "loads":
+        for c in cases:
+            if config.loads_active(c):
+                print(f"=== {c['id']} ({c['loads']}) ===")
+                loads.write_profile(c, c["dir"], config.ROOT)
+            else:
+                print(f"=== {c['id']}: loads: none (paper set-up, delta_T = {c['delta_T']:g} K)")
+        return 0
 
     steps = ["cad", "mesh", "setup", "run", "results", "post"] if a.step == "all" else [a.step]
     failed = []
