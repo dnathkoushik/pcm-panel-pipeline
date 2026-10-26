@@ -480,13 +480,21 @@ The paper does not give these values. Each one is a single line to change.
      0.6 s, −12 K at 3.5 s), and a later run crashed on its second step.
    - Screening mode: one PCM cell next to the ceiling reached 248 K at 0.5 s.
 
-   Wall layers are now off by default and the fvOption has the kink limiter. Check
-   `postProcessing/pcm/pcmTMinMax/0/fieldMinMax.dat` (minimum and its location) of the CI
-   smoke runs before trusting results. **Until the minimum stays at the initial PCM
-   temperature, treat CFD numbers as provisional.**
-2. **Cost of paper mode.** The 0.5 mm shell cells cap the time step at about 0.015 s, against
-   the paper's 0.5 s. Use screening mode for design studies (section 3).
-3. The medium/fine presets are larger than the paper's 1.1 M cells, because the smoke preset
+   Wall layers are now off by default and the fvOption has the kink limiter. In the first
+   paper-mode run without layers (CI, 141 steps) the PCM stayed within 0.0002 K of its
+   initial temperature. Check `postProcessing/pcm/pcmTMinMax/0/fieldMinMax.dat` (minimum and
+   its location) of the CI smoke runs before trusting results. **Until the minimum stays at
+   the initial PCM temperature in both modes, treat CFD numbers as provisional.**
+2. **Air velocity spike in paper mode.** On the first step the air cells at the roots of
+   the V-grooves between touching pyramids (gap 0, just below the slab underside) reach
+   124 m/s. The spike decays only to about 3 m/s by 0.02 s, which holds the air Courant limit
+   at Δt ≈ 1e-4 s. In CI (2 cores) 0.021 s took 2 h 17 min, so the CI paper smoke run is
+   now capped at 40 min. Not yet fixed. Suspects are the snapped groove-root cells and the
+   20 K step at t = 0.
+3. **Cost of paper mode.** Even without that spike, the 0.5 mm shell cells cap the time step
+   at about 0.015 s, against the paper's 0.5 s. Use screening mode for design studies
+   (section 3).
+4. The medium/fine presets are larger than the paper's 1.1 M cells, because the smoke preset
    alone is already 1.2 M. Check `log.checkMesh.*` and tune `config/base_case.yaml`.
 
 **Limitations:**
