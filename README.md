@@ -298,7 +298,7 @@ until the PCM is melted or 18:00, whichever comes first:
 python3 -m pcmpipe loads --study octadecane_roof
 # 16 GB laptop, 4 cores: screening mode (~85-200k cells, thin-shell resistance)
 make docker-study STUDY=octadecane_roof MODE=screening NP=4
-# workstation: paper mode (resolved 1 mm ABS shell, ~1.2 M cells)
+# workstation: paper mode (resolved 1 mm ABS shell, ~1 M cells for the smoke mesh, more for medium/fine)
 make docker-study STUDY=octadecane_roof MODE=paper NP=16
 # any setting for one call, e.g.:
 python3 -m pcmpipe all --study octadecane_roof --mode screening --np 4 \
@@ -473,37 +473,40 @@ The paper does not give these values. Each one is a single line to change.
   numbers, the latent-heat scheme against a converged enthalpy solution, case generation for
   every study, and results/plots on synthetic solver output.
 - Docker image (OpenFOAM v2406, FreeCAD 0.21, ParaView 5.11).
-- The `pcmEnthalpyPorositySource` fvOption compiles against OpenFOAM v2406.
+- The `pcmEnthalpyPorositySource` and `boussinesqBuoyancySource` fvOptions compile against
+  OpenFOAM v2406.
 - FreeCAD builds valid, watertight panels. For the 250 mL pyramid the cavity is 217.2 mL,
   giving 182.4 g of PCM.
-- snappyHexMesh produces the three regions with conformal interfaces (smoke preset: air 447k,
-  shell 266k, PCM 514k cells; screening smoke: air 49k, PCM 36k).
-- Screening mode: `chtMultiRegionFoam` runs the 0.6 s smoke run to the end.
+- snappyHexMesh produces the three regions with conformal interfaces (smoke preset: air 323k,
+  shell 266k, PCM 360k cells; screening smoke: air 42k, PCM 29k).
+- All three smoke runs go end to end (CAD, mesh, 0.6 s of `chtMultiRegionFoam`, results,
+  pvpython figures, plots): paper mode (16 min on 2 cores), screening mode (1.5 min) and the
+  n-octadecane Kharagpur-roof screening run (`uniformFixedValue` tables and
+  `externalWallHeatFluxTemperature` accepted). In all three the PCM minimum stays exactly at
+  its initial temperature (`postProcessing/pcm/pcmTMinMax`).
+
+**Fixed (kept here because earlier results are affected):** single PCM cells used to drift
+below every temperature around them. In the screening smoke run (paper PCM, ΔT = 20 K) one
+cell lost about 40 K/s, reaching 260.9 K at 0.5 s from 278.15 K; in paper mode a run
+crashed. A CI diagnostic ran six variants: switching off the latent source, latent
+convection or the Darcy sink, or moving the pressure reference cell, changed nothing;
+β = 0 removed it exactly. The cause was OpenFOAM's `Boussinesq` equation of state (density
+varying in continuity and energy in a sealed region). The cases now use `rhoConst` plus the
+`boussinesqBuoyancySource` fvOption (section 4). The same change took the paper-mode air
+spike at the pyramid grooves from 124 m/s to 0.67 m/s. **Results computed before commit
+69ac77c should be discarded.**
 
 **Known issues** (open):
-1. **Temperature undershoot in the PCM: cause found, fix being verified.** Single PCM cells
-   drifted below every temperature around them. In the screening smoke run (paper PCM,
-   ΔT = 20 K) one cell lost about 40 K/s, reaching 260.9 K at 0.5 s from 278.15 K; with
-   n-octadecane under the roof the drift was 0.15 K/s. A CI diagnostic ran six variants:
-   switching off the latent source, latent convection or the Darcy sink, or moving the
-   pressure reference cell, changed nothing; setting β = 0 removed it exactly. The cause
-   was OpenFOAM's `Boussinesq` equation of state (density varying in continuity and
-   energy in a sealed region). The cases now use `rhoConst` plus the
-   `boussinesqBuoyancySource` fvOption (section 4). Check
-   `postProcessing/pcm/pcmTMinMax/0/fieldMinMax.dat` of the CI smoke runs; **until the
-   minimum stays at the initial PCM temperature, treat CFD numbers as provisional.**
-2. **Air velocity spike in paper mode.** On the first step the air cells at the roots of
-   the V-grooves between touching pyramids (gap 0, just below the slab underside) reached
-   124 m/s. The spike decayed only to about 3 m/s by 0.02 s, which held the air Courant
-   limit at Δt ≈ 1e-4 s. In CI (2 cores) 0.021 s took 2 h 17 min, so the CI paper smoke run
-   is capped at 40 min. That run used the `Boussinesq` EoS in the closed room, the same
-   mass-conservation error as issue 1, so the `rhoConst` change may cure this too. Not yet
-   confirmed.
-3. **Cost of paper mode.** Even without that spike, the 0.5 mm shell cells cap the time step
-   at about 0.015 s, against the paper's 0.5 s. Use screening mode for design studies
+1. **Air velocity at the groove roots, paper mode.** The air cells at the roots of the
+   V-grooves between touching pyramids (gap 0, just below the slab underside) still reach
+   0.67 m/s at 0.1 s, decaying to 0.44 m/s at 0.5 s. That is about 10 times the free-fall
+   buoyant velocity, so it is a local artefact of the snapped groove-root cells. It holds
+   the air Courant limit at Δt ≈ 5 ms. The screening mesh does not show it (4 mm/s).
+2. **Cost of paper mode.** Even without that, the 0.5 mm shell cells cap the time step at
+   about 0.015 s, against the paper's 0.5 s. Use screening mode for design studies
    (section 3).
-4. The medium/fine presets are larger than the paper's 1.1 M cells, because the smoke preset
-   alone is already 1.2 M. Check `log.checkMesh.*` and tune `config/base_case.yaml`.
+3. The medium/fine presets are larger than the paper's 1.1 M cells, because the smoke preset
+   alone is already 0.95 M (1.2 M with wall layers). Check `log.checkMesh.*` and tune `config/base_case.yaml`.
 
 **Limitations:**
 - Inflation layers are **off in every preset**. They are made with `refineWallLayer` after

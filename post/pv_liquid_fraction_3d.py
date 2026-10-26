@@ -84,6 +84,8 @@ def main():
     rv.ViewSize = size
     rv.OrientationAxesVisibility = 0
     rv.Background = [1, 1, 1]
+    if hasattr(rv, "UseColorPaletteForBackground"):   # ParaView >= 5.10 ignores
+        rv.UseColorPaletteForBackground = 0            # Background otherwise
 
     d = Show(cut, rv)
     ColorBy(d, ("POINTS", "liquidFraction"))

@@ -46,6 +46,8 @@ def render(source, array, rng, title, path, view_box, size, t):
     rv.ViewTime = t
     rv.OrientationAxesVisibility = 0
     rv.Background = [1, 1, 1]
+    if hasattr(rv, "UseColorPaletteForBackground"):   # ParaView >= 5.10 ignores
+        rv.UseColorPaletteForBackground = 0            # Background otherwise
     d = Show(source, rv)
     ColorBy(d, ("POINTS", array))
     lut = GetColorTransferFunction(array)
