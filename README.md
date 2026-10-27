@@ -64,10 +64,13 @@ pcm_panel_pipeline/
 │   ├── docker_run.sh         # run anything inside the container (Linux/macOS/Windows)
 │   ├── install_ubuntu.sh     # native Ubuntu/Debian/WSL2
 │   ├── install_macos.sh      # native macOS (Homebrew, OpenFOAM.app)
+│   ├── ci_long_run.sh        # long runs under a job time limit: clean stop, restart
 │   └── run_all_studies.sh
 ├── Dockerfile, docker/entrypoint.sh   # OpenFOAM + FreeCAD + ParaView image
 ├── Makefile                  # make test | smoke | study | docker-*
 ├── .github/workflows/ci.yml  # tests on Linux/macOS/Windows + Docker smoke run
+├── .github/workflows/long-run.yml  # full-length screening runs on GitHub's servers
+├── docs/figures/             # figures kept in the repository (see its README)
 └── runs/                     # created at run time: one folder per case + _figures/
 ```
 
@@ -228,6 +231,24 @@ make study STUDY=shapes MODE=screening NP=8      # or: python3 -m pcmpipe all --
 make study STUDY=volume MODE=screening NP=8
 make study STUDY=validation NP=8                 # paper mode: compare with the paper's 292 / 353 min
 ```
+
+### Long runs on GitHub-hosted runners
+
+`.github/workflows/long-run.yml` runs full-length screening cases on GitHub's servers
+(4 cores, 16 GB, 6 h per job), one job per case. Start it from the Actions tab or with:
+
+```bash
+gh workflow run long-run.yml -f study=shapes -f set="run.write_interval_min=50"
+gh workflow run long-run.yml -f study=octadecane_roof
+```
+
+`scripts/ci_long_run.sh` stops the solver cleanly (`stopAt writeNow`) after `budget_min`
+minutes (default 280), so post-processing and the uploads fit in the job limit. A case that
+has not finished continues from its last written time when the workflow is dispatched
+again with `resume_run_id=<id of the earlier run>`; restart files are kept for 14 days.
+Each job uploads `results-<study>-<case>` (logs, postProcessing, metrics, images), and the
+`Study figures` job combines them into `figures-<study>`. The script works the same on any
+machine with a time limit, e.g. a cluster queue: `scripts/ci_long_run.sh shapes pyr_ 4 280`.
 
 ### Presentation figures (no CFD needed)
 

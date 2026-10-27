@@ -90,7 +90,8 @@ def main():
     b = meta["panel_bounds_m"]
     cx = 0.5 * (b["x"][0] + b["x"][1])
     W, D = post["view_half_width_m"], post["view_depth_m"]
-    view_box = ((cx - W, cx + W), (-D, 0.0), plane["origin"][1])
+    # a white band above the ceiling (no mesh there) keeps the title off the panel
+    view_box = ((cx - W, cx + W), (-D, 0.08 * D), plane["origin"][1])
     size = post["image_size"]
 
     rT, sT = make_slice(cfoam, ["air", "shell", "pcm"], ["T"], plane)
