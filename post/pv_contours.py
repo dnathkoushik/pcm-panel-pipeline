@@ -81,7 +81,10 @@ def main():
     with open(os.path.join(a.case_dir, "case_meta.json")) as f:
         meta = json.load(f)
     with open(os.path.join(a.case_dir, "case.json")) as f:
-        post = json.load(f)["post"]
+        cj = json.load(f)
+    post = cj["post"]
+    # model.air: coefficient -- the air is meshed but not solved (no fields after 0/)
+    air = ["air"] if cj.get("model", {}).get("air", "resolved") == "resolved" else []
     cfoam = os.path.join(a.case_dir, "case", "case.foam")
     out = os.path.join(a.case_dir, "post")
     os.makedirs(out, exist_ok=True)
@@ -94,9 +97,9 @@ def main():
     view_box = ((cx - W, cx + W), (-D, 0.08 * D), plane["origin"][1])
     size = post["image_size"]
 
-    rT, sT = make_slice(cfoam, ["air", "shell", "pcm"], ["T"], plane)
+    rT, sT = make_slice(cfoam, [*air, "shell", "pcm"], ["T"], plane)
     cT = Calculator(Input=sT, ResultArrayName="T_C", Function="T-273.15")
-    rU, sU = make_slice(cfoam, ["air", "pcm"], ["U"], plane)
+    rU, sU = make_slice(cfoam, [*air, "pcm"], ["U"], plane)
     cU = Calculator(Input=sU, ResultArrayName="Umag_mm_s", Function="mag(U)*1000")
 
     last = max(list(rT.TimestepValues), default=0.0)

@@ -48,6 +48,12 @@ def case_id(case: dict) -> str:
         cid += f"_{case['mesh']['preset']}"
     if case.get("model", {}).get("shell") == "thin" and case["mesh"]["preset"] != "screen":
         cid += "_thin"
+    thin = case.get("model", {}).get("shell") == "thin"
+    air = case.get("model", {}).get("air", "resolved") == "resolved"
+    if thin and air:
+        cid += "_air"                    # screening with the room air solved
+    elif not thin and not air:
+        cid += "_hc"                     # resolved shell, room air as a coefficient
     if case.get("id_suffix") and not cid.endswith("_" + case["id_suffix"]):  # override studies get own folders
         cid += f"_{case['id_suffix']}"
     return cid

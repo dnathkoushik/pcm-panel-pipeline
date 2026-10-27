@@ -37,6 +37,16 @@ def regions(case: dict) -> tuple:
     return ("air", "pcm") if thin_shell(case) else ("air", "shell", "pcm")
 
 
+def air_resolved(case: dict) -> bool:
+    """model.air: resolved (room air solved) | coefficient (natural-convection BC)."""
+    return case.get("model", {}).get("air", "resolved") == "resolved"
+
+
+def solved_regions(case: dict) -> tuple:
+    """Regions chtMultiRegionFoam solves; the air is meshed in both air models."""
+    return tuple(r for r in regions(case) if r != "air" or air_resolved(case))
+
+
 def fluid_interfaces(case: dict) -> dict:
     if thin_shell(case):
         return {"air": "air_to_pcm", "pcm": "pcm_to_air"}

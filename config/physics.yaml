@@ -55,6 +55,22 @@ air:                               # Fluent default air (the paper used Fluent 2
     kappa: 0.4187
     E: 9.793                       # [ASSUMPTION] Fluent default log-law constant
 
+air_side:                          # model.air: coefficient (screening mode)
+  # Room air as a natural-convection coefficient on the panel surface instead of a
+  # solved region:  hc = C (T_room - T_surface)^n  for heat flowing into the panel.
+  # [CALIBRATED] C from our resolved-air screening runs of the reference designs
+  # (GitHub Actions run 40457581405, 27 Oct 2026): area-mean hc = q/(T_room - T_s) at
+  # the last written time -- pyramid 8.66 W/m2K at 14.3 K (t = 136 s), tetrahedron
+  # 9.56 at 11.1 K (435 s), hemisphere 5.84 at 14.2 K (268 s). Design variants use the
+  # C of their shape; re-check shortlisted designs with model.air=resolved.
+  C: {pyramid: 4.45, tetrahedron: 5.24, hemisphere: 3.01}   # [W/m2/K^(1+n)]
+  n: 0.25                          # [ASSUMPTION] laminar exponent: Ra ~ 1e4-1e6 on the panel
+  stable_factor: 0.5               # [ASSUMPTION] surface warmer than the room (warm face
+                                   #   down, stable): C x 0.5, as 0.27 vs 0.54 Ra^1/4 for plates
+  # Paper set-up: the room is closed and adiabatic, so its air cools by the heat the
+  # panel takes (energy balance on the room air, 25 m3). With a loads scenario the
+  # room air follows T_room(t) instead.
+
 initial_conditions:                # [PAPER] Eqs. 25-27
   T_pcm: 278.15                    # [K]
   T_shell: 278.15                  # [K]

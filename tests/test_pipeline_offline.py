@@ -81,12 +81,25 @@ class OfflinePipeline(unittest.TestCase):
         self.pcmpipe("setup", "--study", "shapes", "--mode", "screening")
         case = os.path.join(self.tmp.name, "hem_V250_r50_t1_g0_dT20_screen", "case")
         with open(os.path.join(case, "constant", "regionProperties")) as f:
-            self.assertIn("solid ()", f.read())
+            regions = f.read()
+        self.assertIn("solid ()", regions)
+        self.assertIn("fluid (pcm)", regions)            # room air as a coefficient
         self.assertFalse(os.path.exists(os.path.join(case, "0", "shell")))
         with open(os.path.join(case, "0", "pcm", "T")) as f:
             T = f.read()
         self.assertIn("pcm_to_air", T)
+        self.assertIn("naturalConvectionTemperature", T)
+        self.assertIn("C               3.01", T)          # hemisphere
+        self.assertIn("roomHeatCapacity", T)              # closed room of the paper
         self.assertIn("thicknessLayers (0.001)", T)
+        with open(os.path.join(case, "system", "controlDict")) as f:
+            self.assertNotIn("region          air", f.read())
+        # the resolved-air screening variant keeps the coupled interface
+        self.pcmpipe("setup", "--study", "shapes", "--mode", "screening",
+                     "--case", "hem_", "--set", "model.air=resolved")
+        air_case = os.path.join(self.tmp.name, "hem_V250_r50_t1_g0_dT20_screen_air", "case")
+        with open(os.path.join(air_case, "0", "pcm", "T")) as f:
+            self.assertIn("turbulentTemperatureCoupledBaffleMixed", f.read())
         with open(os.path.join(case, "system", "snappyHexMeshDict")) as f:
             snappy = f.read()
         self.assertNotIn("panel_outer", snappy)

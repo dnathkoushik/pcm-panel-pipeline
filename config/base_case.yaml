@@ -29,12 +29,19 @@ model:
   # thin:     shell as a 1D thermal resistance (thickness/k) in the air-PCM coupling;
   #           no shell cells, PCM reaches the ceiling. Much cheaper; for screening.
   shell: resolved
+  # resolved:    room air solved (Realizable k-eps, paper Sec. 3).
+  # coefficient: room air not solved; a natural-convection coefficient on the panel
+  #              surface (physics.air_side), calibrated from resolved-air runs. The air
+  #              holds the time step near 0.02-0.15 s (Courant number in the 1 mm cells
+  #              next to the panel); without it the PCM runs at the paper's 0.5 s.
+  air: resolved
 
 # Run any study in a mode with:  python3 -m pcmpipe <step> --study X --mode screening
 modes:
   paper: {}
   screening:
     model.shell: thin
+    model.air: coefficient
     mesh.preset: screen
 
 mesh:

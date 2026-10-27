@@ -71,8 +71,9 @@ def write_constant(case: dict, cdir: str):
     c = os.path.join(cdir, "constant")
     thin = mesh.thin_shell(case)
     solids = "" if thin else "shell"     # thin: shell is a resistance in the BC, no region
+    fluids = "air pcm" if mesh.air_resolved(case) else "pcm"   # coefficient: air not solved
     foam.write(os.path.join(c, "regionProperties"),
-               f"regions\n(\n    fluid (air pcm)\n    solid ({solids})\n);")
+               f"regions\n(\n    fluid ({fluids})\n    solid ({solids})\n);")
     # openfoam.com chtMultiRegionFoam reads one case-level g (as in its tutorials)
     foam.write(os.path.join(c, "g"), f"dimensions [0 1 -2 0 0 0 0];\nvalue {vec(ph['gravity'])};",
                cls="uniformDimensionedVectorField", location="constant")
@@ -203,7 +204,9 @@ solvers
 {{
     "rho.*"         {{ solver PCG; preconditioner DIC; tolerance 0; relTol 0; }}
     p_rgh           {{ solver GAMG; smoother GaussSeidel; tolerance 1e-6; relTol 0.01; }}
-    p_rghFinal      {{ $p_rgh; relTol 0; }}
+    // maxIter: in the room air GAMG can stall just above 1e-6 and then ran its
+    // default 1000 sweeps every step (4 s/step, long screening runs 27 Oct)
+    p_rghFinal      {{ $p_rgh; relTol 0; maxIter 50; }}
     "(U{turb})"     {{ solver PBiCGStab; preconditioner DILU; tolerance {tol_o}; relTol 0.1; }}
     "(U{turb})Final" {{ solver PBiCGStab; preconditioner DILU; tolerance {tol_o}; relTol 0; }}
     h               {{ solver PBiCGStab; preconditioner DILU; tolerance {tol_e}; relTol 0.1; }}
@@ -252,6 +255,29 @@ def write_system(case: dict, cdir: str, meta: dict):
         location        true;
         writeControl    timeStep;
         writeInterval   5;
+    }
+"""
+    air_functions = "" if not mesh.air_resolved(case) else """
+    airTMinMax
+    {
+        type            fieldMinMax;
+        libs            (fieldFunctionObjects);
+        region          air;
+        fields          (T U);
+        mode            magnitude;
+        location        true;
+        writeControl    timeStep;
+        writeInterval   5;
+    }
+
+    airResiduals
+    {
+        type            solverInfo;
+        libs            (utilityFunctionObjects);
+        region          air;
+        fields          (U p_rgh h k epsilon);
+        writeControl    timeStep;
+        writeInterval   20;
     }
 """
 
@@ -329,29 +355,7 @@ functions
         writeControl    timeStep;
         writeInterval   5;
     }}
-{shell_minmax}
-    airTMinMax
-    {{
-        type            fieldMinMax;
-        libs            (fieldFunctionObjects);
-        region          air;
-        fields          (T U);
-        mode            magnitude;
-        location        true;
-        writeControl    timeStep;
-        writeInterval   5;
-    }}
-
-    airResiduals
-    {{
-        type            solverInfo;
-        libs            (utilityFunctionObjects);
-        region          air;
-        fields          (U p_rgh h k epsilon);
-        writeControl    timeStep;
-        writeInterval   20;
-    }}
-
+{shell_minmax}{air_functions}
     pcmResiduals
     {{
         type            solverInfo;
@@ -450,6 +454,7 @@ def case_meta(case: dict) -> dict:
         "latent_heat": case["physics"]["pcm"]["latent_heat"],
         "mode": case.get("mode", "paper"),
         "shell_model": "thin" if mesh.thin_shell(case) else "resolved",
+        "air_model": "resolved" if mesh.air_resolved(case) else "coefficient",
     }
     try:
         rep = cad.cad_report(case)

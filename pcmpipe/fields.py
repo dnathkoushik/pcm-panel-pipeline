@@ -59,6 +59,32 @@ value           uniform {num(T0)};
 """
 
 
+def _room_air(case, T0, profile, layer=None):
+    """model.air: coefficient -- the room air as a natural-convection coefficient
+    (physics.air_side). Paper set-up: closed adiabatic room, its air gives up the
+    heat the panel takes; loads scenario: room air follows T_room(t)."""
+    ph = case["physics"]
+    hs = ph["air_side"]
+    C = hs["C"][case["panel"]["shape"]]
+    if profile is None:
+        a, room = ph["air"], ph["room"]
+        Ta = f"constant {num(ph['initial_conditions']['T_air'])}"
+        room_cap = f"roomHeatCapacity {num(a['rho'] * a['cp'] * room['Lx'] * room['Ly'] * room['Lz'])};\n"
+    else:
+        Ta = loads.foam_table(profile["time_s"], [v + 273.15 for v in profile["T_room_C"]])
+        room_cap = ""
+    extra = (f"thicknessLayers ({num(layer[0])});\nkappaLayers     ({num(layer[1])});\n"
+             if layer else "")
+    return f"""
+type            naturalConvectionTemperature;
+Ta              {Ta};
+C               {num(C)};
+Cstable         {num(hs['stable_factor'] * C)};
+n               {num(hs['n'])};
+{extra}{room_cap}value           uniform {num(T0)};
+"""
+
+
 def write_fields(case: dict, cdir: str, profile: dict | None = None):
     """`profile`: loads.profile() of the case's scenario, or None (paper set-up)."""
     ph = case["physics"]
@@ -67,9 +93,12 @@ def write_fields(case: dict, cdir: str, profile: dict | None = None):
     p0 = num(ic["p"])
     zero_dir = os.path.join(cdir, "0")
     thin = case.get("model", {}).get("shell", "resolved") == "thin"
+    air = case.get("model", {}).get("air", "resolved") == "resolved"
     # thin: ABS shell as a 1D resistance t/k between air and PCM (no shell region)
     layer = (case["panel"]["shell_thickness_mm"] * 1e-3, ph["shell"]["k"]) if thin else None
     air_if, pcm_if = ("air_to_pcm", "pcm_to_air") if thin else ("air_to_shell", "pcm_to_shell")
+    # the air is meshed and its 0/ fields are written either way; with model.air:
+    # coefficient it is not solved and the panel surface carries _room_air()
 
     # ------------------------------------------------------------------ air
     d = os.path.join(zero_dir, "air")
@@ -121,7 +150,8 @@ def write_fields(case: dict, cdir: str, profile: dict | None = None):
     _field(os.path.join(d, "T"), "volScalarField", "[0 0 0 1 0 0 0]", f"uniform {num(Tp)}", [
         (".*", "type zeroGradient;"),
         *roof,
-        (pcm_if, _coupled(Tp, "fluidThermo", layer)),
+        (pcm_if, _coupled(Tp, "fluidThermo", layer) if air or not thin
+         else _room_air(case, Tp, profile, layer)),
     ])
     _field(os.path.join(d, "U"), "volVectorField", "[0 1 -1 0 0 0 0]", "uniform (0 0 0)", [
         (".*", "type noSlip;"),                           # Eq. 24: u = 0
@@ -145,7 +175,7 @@ def write_fields(case: dict, cdir: str, profile: dict | None = None):
     _field(os.path.join(d, "T"), "volScalarField", "[0 0 0 1 0 0 0]", f"uniform {num(Ts)}", [
         (".*", "type zeroGradient;"),                     # incl. ceiling: adiabatic panel base
         *roof,                                            #   unless a loads scenario is set
-        ("shell_to_air", _coupled(Ts, "solidThermo")),
+        ("shell_to_air", _coupled(Ts, "solidThermo") if air else _room_air(case, Ts, profile)),
         ("shell_to_pcm", _coupled(Ts, "solidThermo")),   # Eq. 24 flux continuity
     ])
     _field(os.path.join(d, "p"), "volScalarField", "[1 -1 -2 0 0 0 0]", f"uniform {p0}", [
