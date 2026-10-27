@@ -127,7 +127,7 @@ def main():
         t = nearest_time(rd, 60.0 * t_min)
         scene.AnimationTime = t
         rv.ViewTime = t
-        when = f"t = {t / 60:.0f} min"
+        when = f"t = {t:.1f} s" if t < 60 else f"t = {t / 60:.0f} min"
         if clock is not None:
             h = clock + t / 3600.0
             when += f" ({int(h) % 24:02d}:{int(round(60 * (h % 1))) % 60:02d})"

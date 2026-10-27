@@ -109,7 +109,8 @@ def main():
             t = nearest_time(rd, 60.0 * t_min)
             UpdatePipeline(time=t, proxy=calc)
             tag = "T" if arr == "T_C" else "U"
-            title = f"{meta['id']}  {label}  t = {t / 60:.0f} min"
+            when = f"{t:.1f} s" if t < 60 else f"{t / 60:.0f} min"
+            title = f"{meta['id']}  {label}  t = {when}"
             render(calc, arr, rng, title, os.path.join(out, f"contour_{tag}_{t_min:g}min.png"),
                    view_box, size, t)
             SaveData(os.path.join(out, f"slice_{tag}_{t_min:g}min.csv"), proxy=calc)
