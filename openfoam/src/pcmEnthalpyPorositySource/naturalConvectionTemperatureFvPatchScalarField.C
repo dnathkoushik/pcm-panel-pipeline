@@ -236,8 +236,10 @@ void Foam::naturalConvectionTemperatureFvPatchScalarField::write
     os.writeEntry("n", n_);
     if (thicknessLayers_.size())
     {
-        os.writeEntry("thicknessLayers", thicknessLayers_);
-        os.writeEntry("kappaLayers", kappaLayers_);
+        // List::writeEntry tags binary lists (List<scalar>) so that a dictionary
+        // can read them back; os.writeEntry does not (decomposePar writes binary)
+        thicknessLayers_.writeEntry("thicknessLayers", os);
+        kappaLayers_.writeEntry("kappaLayers", os);
     }
     os.writeEntry("roomHeatCapacity", roomHeatCapacity_);
     os.writeEntry("energy", energy_);

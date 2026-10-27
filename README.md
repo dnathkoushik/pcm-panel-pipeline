@@ -209,20 +209,37 @@ write the dictionaries and print the commands without running OpenFOAM.
 The 1 mm ABS shell needs ~0.5 mm cells to resolve. Those cells cap the time step at
 about 0.015 s (Courant limit), against the paper's 0.5 s. In the CI smoke run that meant
 about 14 s per step on 2 cores, so a full 5-hour melt in paper mode takes weeks on a
-laptop. Every study can therefore run in one of two modes (`--mode`, or `MODE=` with make):
+laptop. The room air sets a similar limit even without the shell: in the first
+full-length screening runs (thin shell, air solved, 4 cores) the plume under the panel
+held the step at 0.017–0.15 s, and 280 min of computing covered 2–7 min of melting.
+Every study can therefore run in one of two modes (`--mode`, or `MODE=` with make):
 
 | | `--mode screening` | `--mode paper` (default) |
 |---|---|---|
 | Purpose | rank many designs | confirm the best 2–3 designs, validate against the paper |
-| ABS shell | thin thermal resistance t/k in the air–PCM coupling (`thicknessLayers`, `kappaLayers`); no shell cells | solid region, Eq. 12 |
+| Room air | not solved: natural-convection coefficient on the panel surface (`model.air: coefficient`, below) | solved, Realizable k-ε (Eqs. 2–11) |
+| ABS shell | thin thermal resistance t/k in series with the air side; no shell cells | solid region, Eq. 12 |
 | PCM | fills the cavity up to the (adiabatic) ceiling: cavity + footprint × t | the cavity |
 | Mesh preset | `screen`: 1 mm surface cells | `medium` |
+| Time step | the paper's 0.5 s | Courant-limited, ~5 ms on the smoke mesh |
 | Results folder | `runs/<case>_screen/`, figures in `runs/_figures/<study>_screening/` | `runs/<case>/`, `runs/_figures/<study>/` |
 
-The only physics screening mode drops is the heat stored in the shell itself. For the
-250 mL pyramid that is about 70 J/K (35 g of ABS), or 1.0–1.4 kJ over a 15–20 K rise:
-5–7 % of the PCM's 21 kJ latent heat. The bias is similar for every design, so screening can
-rank designs but not give absolute melting times. Its geometry approximation (PCM up to the
+**Room air in screening mode.** `naturalConvectionTemperature` (our library) applies
+q = U (T_room − T_w) with 1/U = 1/h_c + t/k_shell and h_c = C |T_room − T_s|^0.25, the
+laminar natural-convection law, with T_s the air-side surface temperature. `C` per shape
+(`physics.air_side`) was calibrated from screening runs with the air solved
+(`--set model.air=resolved`, GitHub Actions run 40457581405): area-mean h_c of 8.66 W/m²K
+for the pyramid, 9.56 for the tetrahedron and 5.84 for the hemisphere at 11–14 K. A
+surface warmer than the room (night-time discharge under a roof) gets half that `C`
+(stable, warm face down). In the paper's set-up the room is closed and adiabatic, so the
+boundary condition also takes the heat the panel absorbs out of the 25 m³ of room air
+(about 0.9 K by full melting). With a loads scenario the room air follows `T_room(t)`.
+Design variants reuse the `C` of their shape. Re-check shortlisted designs with the air
+solved, which also shows the air flow.
+
+Screening mode also drops the heat stored in the shell itself. For the 250 mL pyramid that
+is about 70 J/K (35 g of ABS), or 1.0–1.4 kJ over a 15–20 K rise: 5–7 % of the PCM's 21 kJ
+latent heat. The bias is similar for every design. Its geometry approximation (PCM up to the
 ceiling, about 5 % more PCM for 1 mm) is reported in `metrics.json` through the actual PCM
 mass. Rank designs on screening results, then re-run the shortlist in paper mode:
 
@@ -516,6 +533,13 @@ varying in continuity and energy in a sealed region). The cases now use `rhoCons
 `boussinesqBuoyancySource` fvOption (section 4). The same change took the paper-mode air
 spike at the pyramid grooves from 124 m/s to 0.67 m/s. **Results computed before commit
 69ac77c should be discarded.**
+
+**Found 27 Oct:** in the screening runs with the air solved, OpenFOAM v2406's
+`compressible::turbulentTemperatureCoupledBaffleMixed` did not apply `thicknessLayers` /
+`kappaLayers`. The written boundary state is that of a resistance-free interface: each
+side's reference value is the other side's cell temperature, and the two value fractions
+add up to 1. Screening mode no longer uses that condition. With `--set model.air=resolved`
+and a thin shell the shell resistance is missing, about 5 % of the air-side resistance.
 
 **Known issues** (open):
 1. **Air velocity at the groove roots, paper mode.** The air cells at the roots of the
