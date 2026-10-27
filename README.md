@@ -542,15 +542,23 @@ add up to 1. Screening mode no longer uses that condition. With `--set model.air
 and a thin shell the shell resistance is missing, about 5 % of the air-side resistance.
 
 **Known issues** (open):
-1. **Air velocity at the groove roots, paper mode.** The air cells at the roots of the
+1. **Pyramid too slow in screening mode (validation gate 1).** The first full-length
+   screening runs (27 Oct, `docs/figures/results/`) give the tetrahedral panel's t80/t100
+   within 10 % of the paper (228/319 min against 245/353), but the pyramidal panel's
+   47–54 % too long (323/449 min against 219/292), which reverses the paper's ranking.
+   The air-side coefficients were fitted to only 136–435 s of coupled flow, still in the
+   start-up transient; but already at 136 s the coupled runs gave the tetrahedron about
+   twice the pyramid's heat flow per unit area, while the paper reports 47 % more per unit
+   area for the pyramid. Do not rank shapes with screening mode until both pass.
+2. **Air velocity at the groove roots, paper mode.** The air cells at the roots of the
    V-grooves between touching pyramids (gap 0, just below the slab underside) still reach
    0.67 m/s at 0.1 s, decaying to 0.44 m/s at 0.5 s. That is about 10 times the free-fall
    buoyant velocity, so it is a local artefact of the snapped groove-root cells. It holds
    the air Courant limit at Δt ≈ 5 ms. The screening mesh does not show it (4 mm/s).
-2. **Cost of paper mode.** Even without that, the 0.5 mm shell cells cap the time step at
+3. **Cost of paper mode.** Even without that, the 0.5 mm shell cells cap the time step at
    about 0.015 s, against the paper's 0.5 s. Use screening mode for design studies
    (section 3).
-3. The medium/fine presets are larger than the paper's 1.1 M cells, because the smoke preset
+4. The medium/fine presets are larger than the paper's 1.1 M cells, because the smoke preset
    alone is already 0.95 M (1.2 M with wall layers). Check `log.checkMesh.*` and tune `config/base_case.yaml`.
 
 **Limitations:**
