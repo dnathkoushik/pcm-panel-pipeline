@@ -24,7 +24,9 @@ def run_case(case: dict, n_procs: int | None = None, dry: bool = False):
         build_library()
     if n > 1:
         case_setup.write_decomposition(cdir, n, case["run"]["decomposition"], mesh.regions(case))
-        foam.run(["decomposePar", "-allRegions", "-force"], cdir, dry=dry)
+        # -latestTime: a fresh case has only 0/; a restarted one needs only the time it
+        # continues from (controlDict: startFrom latestTime)
+        foam.run(["decomposePar", "-allRegions", "-force", "-latestTime"], cdir, dry=dry)
         foam.run([*foam.tool(case, "mpirun"), "-np", str(n), "chtMultiRegionFoam", "-parallel"],
                  cdir, dry=dry)
         foam.run(["reconstructPar", "-allRegions", "-newTimes"], cdir, dry=dry)

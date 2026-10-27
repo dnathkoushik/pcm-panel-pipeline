@@ -119,7 +119,11 @@ def main():
     scene = GetAnimationScene()
     scene.UpdateAnimationUsingDataTimeSteps()
     clock = meta.get("start_clock_h")
+    last = max(list(rd.TimestepValues), default=0.0)
     for t_min in a.times:
+        if 60.0 * t_min > last + 1.0:    # run ended earlier (melted, or a wall-clock cap)
+            print(f"  skip {t_min:g} min: last written time is {last / 60:.0f} min")
+            continue
         t = nearest_time(rd, 60.0 * t_min)
         scene.AnimationTime = t
         rv.ViewTime = t

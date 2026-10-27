@@ -65,6 +65,7 @@ octadecane_roof:
     pcm_material: n_octadecane
     loads: kharagpur_roof
     run.max_end_time_min: 720     # 06:00-18:00, or earlier once fully melted
+    run.write_interval_min: 60    # fields hourly (the curves are sampled every 30 s)
     post.contour_times_min: [60, 120, 180, 240, 360, 480, 600, 720]
     post.T_range_C: [24.0, 40.0]
   id_suffix: false                # ids already carry _kgp_c18

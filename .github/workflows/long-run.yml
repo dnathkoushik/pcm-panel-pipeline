@@ -1,0 +1,124 @@
+name: Long run
+
+# Full-length screening-mode runs on GitHub-hosted runners (4 cores, 6 h per job),
+# one job per case. The solver stops cleanly after `budget_min`; to continue a case
+# that has not finished, run this workflow again with `resume_run_id` set to the
+# earlier run's id (its restart files are kept for 14 days).
+on:
+  workflow_dispatch:
+    inputs:
+      study:
+        description: "Study in config/studies.yaml"
+        default: shapes
+      cases:
+        description: "Case-id fragments, one job each (JSON list)"
+        default: '["pyr_", "tet_", "hem_"]'
+      budget_min:
+        description: "Minutes for CAD + mesh + solver before a clean stop (job limit 360)"
+        default: "280"
+      set:
+        description: "Space-separated KEY=VALUE config overrides (pcmpipe --set)"
+        default: ""
+      resume_run_id:
+        description: "Id of an earlier Long run to continue from (empty: start fresh)"
+        default: ""
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  run:
+    name: ${{ inputs.study }} ${{ matrix.case }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        case: ${{ fromJSON(inputs.cases) }}
+    env:
+      STUDY: ${{ inputs.study }}
+      CASE: ${{ matrix.case }}
+      SETS: ${{ inputs.set }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image (OpenFOAM + FreeCAD + ParaView)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          tags: pcm-panel-pipeline:latest
+          load: true
+          cache-from: type=gha           # the CI workflow keeps this cache warm
+      - name: Compile the PCM fvOption
+        run: scripts/docker_run.sh make lib
+      - name: Restart files from run ${{ inputs.resume_run_id }}
+        if: inputs.resume_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: restart-${{ inputs.study }}-${{ matrix.case }}
+          path: runs
+          run-id: ${{ inputs.resume_run_id }}
+          github-token: ${{ github.token }}
+      - name: CAD, mesh and solver (clean stop after ${{ inputs.budget_min }} min)
+        run: |
+          extra=(); for s in $SETS; do extra+=(--set "$s"); done
+          bash scripts/ci_long_run.sh "$STUDY" "$CASE" 4 "${{ inputs.budget_min }}" "${extra[@]}"
+      - name: Results, contours, 3D views and plots
+        if: success() || failure()
+        run: |
+          extra=(); for s in $SETS; do extra+=(--set "$s"); done
+          opts=(--study "$STUDY" --mode screening --case "$CASE" "${extra[@]}")
+          scripts/docker_run.sh python3 -m pcmpipe results "${opts[@]}"
+          scripts/docker_run.sh python3 -m pcmpipe post "${opts[@]}"
+          scripts/docker_run.sh python3 -m pcmpipe plots --study "$STUDY" --mode screening
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ inputs.study }}-${{ matrix.case }}
+          if-no-files-found: warn
+          path: |
+            runs/**/log.*
+            runs/*/*.json
+            runs/*/*.csv
+            runs/*/*.png
+            runs/*/cad/cad_report.json
+            runs/*/case/postProcessing/**
+            runs/*/post/**
+            runs/_figures/**
+      - name: Upload restart files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: restart-${{ inputs.study }}-${{ matrix.case }}
+          if-no-files-found: ignore
+          retention-days: 14
+          compression-level: 1
+          path: |
+            runs/
+            !runs/_figures/**
+
+  combine:
+    name: Study figures
+    needs: run
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: results-${{ inputs.study }}-*
+          path: runs
+          merge-multiple: true
+      - name: Plots and CSVs for all cases
+        run: python post/plot_results.py --study "${{ inputs.study }}" --mode screening
+      - uses: actions/upload-artifact@v4
+        with:
+          name: figures-${{ inputs.study }}
+          path: runs/_figures/

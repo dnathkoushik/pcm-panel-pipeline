@@ -98,7 +98,11 @@ def main():
     rU, sU = make_slice(cfoam, ["air", "pcm"], ["U"], plane)
     cU = Calculator(Input=sU, ResultArrayName="Umag_mm_s", Function="mag(U)*1000")
 
+    last = max(list(rT.TimestepValues), default=0.0)
     for t_min in a.times:
+        if 60.0 * t_min > last + 1.0:    # run ended earlier (melted, or a wall-clock cap)
+            print(f"  skip {t_min:g} min: last written time is {last / 60:.0f} min")
+            continue
         for rd, calc, arr, rng, label in (
                 (rT, cT, "T_C", post["T_range_C"], "T (C)"),
                 (rU, cU, "Umag_mm_s", post["U_range_mm_s"], "|U| (mm/s)")):
