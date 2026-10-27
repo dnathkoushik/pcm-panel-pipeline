@@ -1,4 +1,4 @@
 id,shape,pcm_material,loads,pcm_mass_g,exposed_area_cm2,t80_min,t100_min,final_liquid_fraction,average_melting_rate_g_min,normalised_rate_g_min_L,normalised_rate_paper_g_min_L,average_melting_rate_per_area_g_min_cm2
-pyr_V250_r50_t1_g0_kgp_c18_screen,pyramid,n_octadecane,kharagpur_roof,176.85074409619438,219.04643011100424,,,0.48266290753,,,,
-tet_V250_r50_t1_g0_kgp_c18_screen,tetrahedron,n_octadecane,kharagpur_roof,172.86506593994042,268.00086944802797,,,0.36652846167,,,,
-hem_V250_r50_t1_g0_kgp_c18_screen,hemisphere,n_octadecane,kharagpur_roof,176.34523557919715,223.11274157106635,,,0.56078684089,,,,
+pyr_V250_r50_t1_g0_kgp_c18_screen,pyramid,n_octadecane,kharagpur_roof,176.85074409619438,219.04643011100424,367.9916732062284,487.37425870755624,1.0,0.3628643510331796,1.4514574041327184,1.395231668170696,0.0016565636374411307
+tet_V250_r50_t1_g0_kgp_c18_screen,tetrahedron,n_octadecane,kharagpur_roof,172.86506593994042,268.00086944802797,395.7601645007834,,0.99641578818,,,,
+hem_V250_r50_t1_g0_kgp_c18_screen,hemisphere,n_octadecane,kharagpur_roof,176.34523557919715,223.11274157106635,402.87684506153084,530.4739211430945,1.0,0.3324296040778003,1.3297184163112012,1.2818726291665734,0.001489962436645126

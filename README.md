@@ -549,7 +549,13 @@ and a thin shell the shell resistance is missing, about 5 % of the air-side resi
    The air-side coefficients were fitted to only 136–435 s of coupled flow, still in the
    start-up transient; but already at 136 s the coupled runs gave the tetrahedron about
    twice the pyramid's heat flow per unit area, while the paper reports 47 % more per unit
-   area for the pyramid. Do not rank shapes with screening mode until both pass.
+   area for the pyramid. A sensitivity test (runs 40559476330, 40559494680) scaled the
+   pyramid's coefficient: ×1.5 gives 234/322 min (+7.0/+10.4 %), ×2 gives 189/258 min
+   (−13.5/−11.6 %). The paper's t80 and t100 both lie between the two, so one change in heat
+   input moves the whole curve onto the paper's: the gap is in the air-side coefficient, not
+   the PCM model. Part of the factor only makes up for the 12 % extra PCM. This is not a
+   calibration; C stays 4.45 until coupled runs measure it in developed flow.
+   Do not rank shapes with screening mode until both pass.
 2. **Air velocity at the groove roots, paper mode.** The air cells at the roots of the
    V-grooves between touching pyramids (gap 0, just below the slab underside) still reach
    0.67 m/s at 0.1 s, decaying to 0.44 m/s at 0.5 s. That is about 10 times the free-fall

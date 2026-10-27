@@ -45,7 +45,9 @@ white band above the ceiling for them.
 ## results/: first full-length runs (screening mode)
 
 From the GitHub Actions `Long run` workflow on commit 29a9943 (27 Oct 2026; 4 cores, 280 min
-per case): shapes run 40496215888, octadecane_roof run 40496221065. Screening mode solves
+per case): shapes run 40496215888, octadecane_roof run 40496221065, each case continued from
+its restart files where 280 min was not enough (hemisphere: run 40543528335; roof: run
+40543536933). Screening mode solves
 only the PCM, at the paper's 0.5 s step: the 1 mm shell is a thermal resistance and the room
 air the `naturalConvectionTemperature` coefficient of `config/physics.yaml`. In all six runs
 the step stayed at 0.5 s and the lowest PCM temperature never fell below its starting value.
@@ -58,10 +60,10 @@ within 10 % of the paper, the pyramid is 47–54 % too slow.
 | File | Shows |
 |---|---|
 | `shapes_screening/paper_comparison.png` | t80/t100 of the paper set-up (ΔT 20 K) against Yang et al. Sec. 4.1, with the ±10 % band of gate 1 |
-| `shapes_screening/liquid_fraction_and_rate.png` | liquid fraction and melting rate, as the paper's Fig. 10 (hemisphere stopped at 77 % liquid, 414 min; continued in run 40543528335) |
+| `shapes_screening/liquid_fraction_and_rate.png` | liquid fraction and melting rate, as the paper's Fig. 10, all three panels to full melting |
 | `shapes_screening/liquid_fraction_3d_montage.png` | 3D liquid fraction at 50, 150, 250, 300 min (the paper's Fig. 9 times) |
 | `shapes_screening/mean_pcm_temperature.png`, `probe_temperatures.png` | mean PCM temperature; probes at 1, 2/3 and 1/3 of the protrusion height (the paper's Fig. 8 points) |
 | `shapes_screening/summary.csv`, `*_vs_time.csv` | the numbers behind the plots |
-| `octadecane_roof_screening/liquid_fraction_curves.png`, `mean_pcm_temperature.png` | n-octadecane under the Kharagpur roof from 06:00, up to 10:16–11:07 (continued in run 40543536933) |
-| `octadecane_roof_screening/liquid_fraction_3d_montage.png` | 3D liquid fraction at 07:00, 08:00, 09:00, 10:00 |
+| `octadecane_roof_screening/liquid_fraction_curves.png`, `mean_pcm_temperature.png` | n-octadecane under the Kharagpur roof from 06:00 to 14:20–17:57: all three fully liquid by about 15:00 (evening and night in run 40601205820) |
+| `octadecane_roof_screening/liquid_fraction_3d_montage.png` | 3D liquid fraction at 07:00, 08:00, 09:00, 10:00 (first run; the continuation's 3D views rendered without the field and are not kept) |
 | `octadecane_roof_screening/summary.csv`, `*_vs_time.csv` | the numbers behind the plots |
