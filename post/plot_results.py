@@ -262,13 +262,51 @@ def write_curves(rows, outdir):
         print(f"  wrote {name}.csv")
 
 
+def fig_paper_comparison(rows, outdir):
+    """t80/t100 of the paper set-up (dT = 20 K, no loads) against Sec. 4.1, with the
+    +-10 % band of validation gate 1."""
+    pairs = []
+    for r in rows:
+        ref = REF["melting_time_min"].get(r["shape"])
+        if ref is None or r.get("loads") or r.get("delta_T") != 20:
+            continue
+        for key, frac in (("t80", "80 %"), ("t100", "100 %")):
+            if r.get(f"{key}_min"):
+                pairs.append((f"{r['shape'].capitalize()}, {frac}", ref[key],
+                              r[f"{key}_min"], COLOR[r["shape"]]))
+    if not pairs:
+        return
+    fig, ax = plt.subplots(figsize=(6.4, 0.55 * len(pairs) + 1.3))
+    for i, (label, paper, ours, c) in enumerate(pairs):
+        y = len(pairs) - 1 - i
+        ax.fill_betweenx([y - 0.3, y + 0.3], 0.9 * paper, 1.1 * paper, color="#d9d9d9", lw=0,
+                         label="paper ± 10 %" if i == 0 else None)
+        ax.plot([paper, ours], [y, y], color=c, lw=1.2)
+        ax.plot(paper, y, "o", ms=8, mfc="white", mec="k", mew=1.2,
+                label="Yang et al. 2023" if i == 0 else None)
+        ax.plot(ours, y, "o", ms=8, color=c, mec="white", mew=1.0)
+        ax.text(max(paper, ours) * 1.02 + 4, y,
+                f"{100 * (ours / paper - 1):+.1f} %".replace("-", "−"), va="center", fontsize=9)
+    ax.set_yticks(range(len(pairs)), [p[0] for p in reversed(pairs)])
+    ax.set_xlabel("Time to 80 % / 100 % liquid (min)")
+    ax.set_xlim(0, max(max(p[1:3]) for p in pairs) * 1.18)
+    ax.set_ylim(-0.6, len(pairs) - 0.4)
+    ax.plot([], [], "o", ms=8, color="#7f7f7f", mec="white", label="this run (filled, by shape)")
+    ax.legend(fontsize=8, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=3)
+    savefig(fig, outdir, "paper_comparison")
+
+
 def fig_3d_montage(rows, outdir):
     """liquid_fraction_3d_<t>min.png of every case (rows) and time (columns)."""
-    times = rows[0]["contour_times_min"]
-    grid = [[os.path.join(r["dir"], "post", f"liquid_fraction_3d_{t:g}min.png") for t in times]
-            for r in rows]
-    if not any(os.path.exists(p) for line in grid for p in line):
+    def path(r, t):
+        return os.path.join(r["dir"], "post", f"liquid_fraction_3d_{t:g}min.png")
+
+    # only the times some case has reached (a run stopped early has no later views)
+    times = [t for t in rows[0]["contour_times_min"]
+             if any(os.path.exists(path(r, t)) for r in rows)]
+    if not times:
         return
+    grid = [[path(r, t) for t in times] for r in rows]
     fig, axes = plt.subplots(len(rows), len(times), squeeze=False,
                              figsize=(2.6 * len(times), 1.6 * len(rows) + 0.4))
     for i, (r, line) in enumerate(zip(rows, grid)):
@@ -322,6 +360,7 @@ def main():
     else:
         fig_rate_twin(rows, outdir)
         fig_probes(rows, outdir)
+        fig_paper_comparison(rows, outdir)
     if param == "panel.volume_ml":
         for conv in (["physical", "paper"] if a.rate_convention == "both" else [a.rate_convention]):
             fig_normalised_rate(rows, param, outdir, conv)

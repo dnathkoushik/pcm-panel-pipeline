@@ -10,7 +10,7 @@ import json
 import os
 
 from paraview.simple import (Calculator, ColorBy, CreateView, GetColorTransferFunction,
-                             MergeBlocks, OpenFOAMReader, Render, SaveData, SaveScreenshot,
+                             GetScalarBar, MergeBlocks, OpenFOAMReader, Render, SaveData, SaveScreenshot,
                              Show, Slice, Text, UpdatePipeline)
 
 
@@ -40,7 +40,7 @@ def make_slice(cfoam, regions, arrays, plane):
     return rd, sl
 
 
-def render(source, array, rng, title, path, view_box, size, t):
+def render(source, array, rng, label, title, path, view_box, size, t):
     rv = CreateView("RenderView")
     rv.ViewSize = size
     rv.ViewTime = t
@@ -55,6 +55,13 @@ def render(source, array, rng, title, path, view_box, size, t):
     lut.RescaleTransferFunction(rng[0], rng[1])
     lut.AutomaticRescaleRangeMode = "Never"
     d.SetScalarBarVisibility(rv, True)
+    bar = GetScalarBar(lut, rv)
+    bar.Title = label
+    bar.ComponentTitle = ""
+    bar.TitleColor = [0, 0, 0]          # the default white is invisible on white
+    bar.LabelColor = [0, 0, 0]
+    bar.TitleFontSize = 18
+    bar.LabelFontSize = 16
     txt = Text(Text=title)
     td = Show(txt, rv)
     td.FontSize = 14
@@ -93,6 +100,9 @@ def main():
     b = meta["panel_bounds_m"]
     cx = 0.5 * (b["x"][0] + b["x"][1])
     W, D = post["view_half_width_m"], post["view_depth_m"]
+    if not air:      # nothing to show around the panel: frame the panel itself
+        W = 0.6 * (b["x"][1] - b["x"][0])
+        D = 1.25 * (b["z"][1] - b["z"][0])
     # a white band above the ceiling (no mesh there) keeps the title off the panel
     view_box = ((cx - W, cx + W), (-D, 0.08 * D), plane["origin"][1])
     size = post["image_size"]
@@ -115,8 +125,8 @@ def main():
             tag = "T" if arr == "T_C" else "U"
             when = f"{t:.1f} s" if t < 60 else f"{t / 60:.0f} min"
             title = f"{meta['id']}  {label}  t = {when}"
-            render(calc, arr, rng, title, os.path.join(out, f"contour_{tag}_{t_min:g}min.png"),
-                   view_box, size, t)
+            render(calc, arr, rng, label, title,
+                   os.path.join(out, f"contour_{tag}_{t_min:g}min.png"), view_box, size, t)
             SaveData(os.path.join(out, f"slice_{tag}_{t_min:g}min.csv"), proxy=calc)
             print(f"  wrote contour_{tag}_{t_min:g}min.png (t = {t:.0f} s)")
 

@@ -124,6 +124,7 @@ class OfflinePipeline(unittest.TestCase):
             self.assertEqual(r.returncode, 0, msg=r.stdout + r.stderr)
         figs = os.path.join(self.tmp.name, "_figures")
         for rel in ("validation/liquid_fraction_and_rate.png", "validation/probe_temperatures.png",
+                    "validation/paper_comparison.png",
                     "volume/melting_time_bars.png", "volume/normalised_rate_paper.png",
                     "volume/normalised_rate_physical.png", "volume/summary.csv"):
             self.assertTrue(os.path.isfile(os.path.join(figs, rel)), rel)
