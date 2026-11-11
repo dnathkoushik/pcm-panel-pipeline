@@ -264,32 +264,41 @@ def write_curves(rows, outdir):
 
 def fig_paper_comparison(rows, outdir):
     """t80/t100 of the paper set-up (dT = 20 K, no loads) against Sec. 4.1, with the
-    +-10 % band of validation gate 1."""
+    +-10 % band of validation gate 1. A shape the paper did not study (the hemisphere)
+    gets its own markers only, marked "no paper value"."""
     pairs = []
     for r in rows:
-        ref = REF["melting_time_min"].get(r["shape"])
-        if ref is None or r.get("loads") or r.get("delta_T") != 20:
+        if r.get("loads") or r.get("delta_T") != 20:
             continue
+        ref = REF["melting_time_min"].get(r["shape"])
         for key, frac in (("t80", "80 %"), ("t100", "100 %")):
             if r.get(f"{key}_min"):
-                pairs.append((f"{r['shape'].capitalize()}, {frac}", ref[key],
+                pairs.append((f"{r['shape'].capitalize()}, {frac}", ref[key] if ref else None,
                               r[f"{key}_min"], COLOR[r["shape"]]))
-    if not pairs:
+    if not any(p[1] for p in pairs):
         return
     fig, ax = plt.subplots(figsize=(6.4, 0.55 * len(pairs) + 1.3))
+    first = True
     for i, (label, paper, ours, c) in enumerate(pairs):
         y = len(pairs) - 1 - i
+        if paper is None:
+            ax.plot(ours, y, "o", ms=8, color=c, mec="white", mew=1.0)
+            ax.text(ours - 14, y, "no paper value", va="center", ha="right", fontsize=9,
+                    color="#5f6b7a")
+            continue
         ax.fill_betweenx([y - 0.3, y + 0.3], 0.9 * paper, 1.1 * paper, color="#d9d9d9", lw=0,
-                         label="paper ± 10 %" if i == 0 else None)
+                         label="paper ± 10 %" if first else None)
         ax.plot([paper, ours], [y, y], color=c, lw=1.2)
         ax.plot(paper, y, "o", ms=8, mfc="white", mec="k", mew=1.2,
-                label="Yang et al. 2023" if i == 0 else None)
+                label="Yang et al. 2023" if first else None)
         ax.plot(ours, y, "o", ms=8, color=c, mec="white", mew=1.0)
         ax.text(max(paper, ours) * 1.02 + 4, y,
                 f"{100 * (ours / paper - 1):+.1f} %".replace("-", "−"), va="center", fontsize=9)
+        first = False
     ax.set_yticks(range(len(pairs)), [p[0] for p in reversed(pairs)])
     ax.set_xlabel("Time to 80 % / 100 % liquid (min)")
-    ax.set_xlim(0, max(max(p[1:3]) for p in pairs) * 1.18)
+    # at least 650 min, so the hemisphere's 614 min fits; room for the % labels
+    ax.set_xlim(0, max(650.0, *(max(p[1], p[2]) * 1.18 if p[1] else p[2] * 1.05 for p in pairs)))
     ax.set_ylim(-0.6, len(pairs) - 0.4)
     ax.plot([], [], "o", ms=8, color="#7f7f7f", mec="white", label="this run (filled, by shape)")
     ax.legend(fontsize=8, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=3)

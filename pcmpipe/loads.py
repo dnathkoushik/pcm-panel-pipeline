@@ -198,12 +198,16 @@ def write_profile(case: dict, out_dir: str, root: str = ".") -> dict:
     ax.set_xticks(ticks, [f"{int(x) % 24:02d}:00" for x in ticks])
     ax.set_xlim(h[0], h[-1])
     ax2 = ax.twinx()
-    ax2.fill_between(h, p["I_global_W_m2"], color="#fdae6b", alpha=0.25, lw=0)
+    ax2.fill_between(h, p["I_global_W_m2"], color="#fdae6b", alpha=0.25, lw=0,
+                     label="Solar Radiation (GHI)")
     ax2.set_ylabel("Global horizontal irradiance (W/m²)")
-    ax2.set_ylim(0, 3.0 * max(1.0, p["I_global_W_m2"].max()))
+    # 1100 W/m² tops a clear-sky GHI; only a stronger input day extends the axis
+    ax2.set_ylim(0, max(1100.0, 1.05 * p["I_global_W_m2"].max()))
     ax.set_zorder(ax2.get_zorder() + 1)
     ax.patch.set_visible(False)
-    ax.legend(fontsize=8, loc="upper left")
+    lines, labels = ax.get_legend_handles_labels()
+    fills, fill_labels = ax2.get_legend_handles_labels()
+    ax.legend(lines + fills, labels + fill_labels, fontsize=8, loc="upper left")
     ax.set_title(f"{spec['location']['name']}, day {spec['day_of_year']}: roof boundary conditions",
                  fontsize=10)
     fig.savefig(os.path.join(out_dir, "loads_profile.png"), dpi=200, bbox_inches="tight")
