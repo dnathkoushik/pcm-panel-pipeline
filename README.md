@@ -7,6 +7,11 @@ phase change material (PCM) ceiling panels. All physics follows
 **Yang et al., "PCM-based ceiling panels for passive cooling in buildings: A CFD
 modelling", Energy & Buildings 285 (2023) 112898** (Sections 2.2, 2.3 and 3).
 
+> **New: PCM embedded in a concrete roof slab** (after Abass & Muthulingam 2024,
+> Energy & Buildings 317, 114387). It is in [`roof/`](roof/README.md): its own
+> configuration, OpenFOAM templates and SLURM jobs for PARAM Shakti. The
+> ceiling-panel pipeline below is unchanged.
+
 ```
 config/*.yaml ──► FreeCAD (CAD, STL, STEP) ──► snappyHexMesh (3 regions) ──► chtMultiRegionFoam
                                                                         + pcmEnthalpyPorositySource

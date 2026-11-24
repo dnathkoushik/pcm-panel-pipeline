@@ -1,0 +1,81 @@
+{
+  "run": "/work/roof/runs/baseline_specimen",
+  "case_id": null,
+  "passed": true,
+  "gates": {
+    "complete": {
+      "pass": true,
+      "value": 259200.0,
+      "limit": 259200.0,
+      "unit": "s",
+      "note": "last sampled time vs endTime"
+    },
+    "periodic": {
+      "pass": true,
+      "value": 0.02724311999998008,
+      "limit": 0.05,
+      "unit": "K",
+      "note": "max |T(t) - T(t - 24 h)|, roof and ceiling surfaces"
+    },
+    "reference": {
+      "pass": true,
+      "value": 1.338000004125206e-05,
+      "limit": 0.05,
+      "unit": "K",
+      "note": "max |T_s - T_s,1D| over 864 samples"
+    },
+    "energy": {
+      "pass": true,
+      "value": 6.772219438325064e-08,
+      "limit": 0.01,
+      "unit": "-",
+      "note": "(roof in - ceiling out - stored) / gross roof heat flow"
+    }
+  },
+  "metrics": {
+    "analysed_window_s": [
+      172800.0,
+      259200.0
+    ],
+    "T_roof_C": {
+      "max": 57.15562586000004,
+      "at_h": 14.75,
+      "min": 28.61144558000001,
+      "at_h_min": 5.75
+    },
+    "T_ceiling_C": {
+      "max": 51.97463772000003,
+      "at_h": 17.916666666666668,
+      "min": 31.23284675000002,
+      "at_h_min": 7.833333333333333,
+      "mean": 41.44528920681663
+    },
+    "T_solair_C": {
+      "max": 70.256028,
+      "at_h": 13.166666666666666,
+      "min": 23.101092
+    },
+    "decrement_factor": 0.4398646828828272,
+    "time_lag_h": 4.750000000000002,
+    "q_ceiling_gain_W_m2": {
+      "max": 12.613218982631787,
+      "at_h": 19.5,
+      "min": -1.171650098735338,
+      "at_h_min": 10.75,
+      "mean": 7.169737970730012
+    },
+    "daily_Wh_m2": {
+      "roof_in": 172.0146428283234,
+      "ceiling_gain_net": 172.0737112975203,
+      "cooling_load": 174.70972960379214,
+      "heating_load": 2.6360183062718394,
+      "total_load": 177.34574791006398,
+      "stored_change": -0.05930755307029358
+    },
+    "wallHeatFlux_vs_bc_W_m2": {
+      "roof_max_abs": 0.0008500811111957773,
+      "ceiling_max_abs": 5.565507651539292e-05,
+      "note": "diagnostic, not a gate"
+    }
+  }
+}

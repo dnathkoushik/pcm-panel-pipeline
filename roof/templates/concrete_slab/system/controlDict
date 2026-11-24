@@ -1,0 +1,150 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/concrete_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Phase 1: pure concrete slab, @N_DAYS@ x 24 h of the design day.
+// openfoam.com (ESI) v2306+; chtMultiRegionFoam with the single solid region
+// `concrete` (Phase 2 adds the PCM region to the same set-up).
+
+application     chtMultiRegionFoam;
+
+startFrom       latestTime;         // a resubmitted job continues the run
+startTime       0;
+stopAt          endTime;
+endTime         @END_TIME@;
+deltaT          @DELTA_T@;
+
+// Full fields only for restarts and Phase 3 contours; the time series come
+// from the function objects below (a few hundred kB per case).
+writeControl    adjustableRunTime;
+writeInterval   @WRITE_INTERVAL@;
+purgeWrite      0;
+writeFormat     binary;
+writePrecision  10;
+writeCompression off;
+timeFormat      general;
+timePrecision   10;
+runTimeModifiable true;
+
+adjustTimeStep  no;                 // conduction only: a fixed step, implicit Euler
+maxCo           1;
+maxDi           1000;
+maxDeltaT       @DELTA_T@;
+
+functions
+{
+    // ---- Phase 3 metrics: surface temperatures (paper Figs. 7, 8) --------
+    roofSurface
+    {
+        type            surfaceFieldValue;
+        libs            (fieldFunctionObjects);
+        region          concrete;
+        writeControl    adjustableRunTime;
+        writeInterval   @SAMPLE_INTERVAL@;
+        log             false;
+        writeFields     false;
+        regionType      patch;
+        name            roof;
+        operation       areaAverage;
+        fields          (T);
+    }
+
+    ceilingSurface
+    {
+        type            surfaceFieldValue;
+        libs            (fieldFunctionObjects);
+        region          concrete;
+        writeControl    adjustableRunTime;
+        writeInterval   @SAMPLE_INTERVAL@;
+        log             false;
+        writeFields     false;
+        regionType      patch;
+        name            ceiling;
+        operation       areaAverage;
+        fields          (T);
+    }
+
+    // ---- heat flow through both faces (paper Figs. 9, 13) ----------------
+    // Integral [W] per patch, positive INTO the slab. roofpipe check divides by
+    // the face area and also evaluates h (T_a - T_s) from the surface
+    // temperatures, which is what the boundary condition imposes.
+    surfaceHeatFlux
+    {
+        type            wallHeatFlux;
+        libs            (fieldFunctionObjects);
+        region          concrete;
+        patches         (roof ceiling);
+        // v2406 writes the .dat in execute() and the full wallHeatFlux field in
+        // write(), whatever writeFields says: sample every SAMPLE_INTERVAL, write
+        // the field only with the other fields
+        executeControl  adjustableRunTime;
+        executeInterval @SAMPLE_INTERVAL@;
+        writeControl    writeTime;
+        log             false;
+        errors          warn;           // diagnostic only: never stop the run
+    }
+
+    // ---- stored heat (paper Eq. 7, Fig. 11) ------------------------------
+    slabAverage
+    {
+        type            volFieldValue;
+        libs            (fieldFunctionObjects);
+        region          concrete;
+        writeControl    adjustableRunTime;
+        writeInterval   @SAMPLE_INTERVAL@;
+        log             false;
+        writeFields     false;
+        regionType      all;
+        operation       volAverage;
+        fields          (T);
+    }
+
+    // ---- T(z) through the slab centre, at the cell centres ---------------
+    thicknessProfile
+    {
+        type            probes;
+        libs            (sampling);
+        region          concrete;
+        writeControl    adjustableRunTime;
+        writeInterval   @PROFILE_INTERVAL@;
+        fields          (T);
+        probeLocations
+        (
+@PROFILE_PROBES@
+        );
+    }
+
+    // ---- sanity ----------------------------------------------------------
+    concreteTMinMax
+    {
+        type            fieldMinMax;
+        libs            (fieldFunctionObjects);
+        region          concrete;
+        fields          (T);
+        mode            magnitude;
+        location        false;
+        writeControl    adjustableRunTime;
+        writeInterval   @SAMPLE_INTERVAL@;
+    }
+
+    concreteResiduals
+    {
+        type            solverInfo;
+        libs            (utilityFunctionObjects);
+        region          concrete;
+        fields          (h);
+        writeControl    timeStep;
+        writeInterval   20;
+    }
+}
+
+// ************************************************************************* //

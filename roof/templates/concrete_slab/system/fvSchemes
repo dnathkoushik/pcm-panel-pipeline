@@ -1,0 +1,16 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/concrete_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      fvSchemes;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Case level: not used by chtMultiRegionFoam (see system/concrete/fvSchemes).
+
+// ************************************************************************* //

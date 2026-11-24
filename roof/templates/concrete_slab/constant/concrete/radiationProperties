@@ -1,0 +1,19 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/concrete_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant/concrete";
+    object      radiationProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Solar and long-wave exchange of the roof face are in the sol-air temperature
+// of its boundary condition (0/concrete/T); no radiation is solved.
+radiation       off;
+radiationModel  none;
+
+// ************************************************************************* //

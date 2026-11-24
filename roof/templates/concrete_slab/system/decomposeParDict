@@ -1,0 +1,31 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/concrete_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      decomposeParDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Must equal the MPI rank count (the job script passes SLURM_NTASKS).
+numberOfSubdomains  @NP@;
+
+method              @DECOMP_METHOD@;
+
+// Only read by the geometric methods (run.decomposition: simple | hierarchical)
+simpleCoeffs
+{
+    n               (@PX@ @PY@ 1);
+}
+
+hierarchicalCoeffs
+{
+    n               (@PX@ @PY@ 1);
+    order           xyz;
+}
+
+// ************************************************************************* //

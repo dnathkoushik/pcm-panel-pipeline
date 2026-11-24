@@ -1,0 +1,197 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/pcm_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Phase 2 case @CASE_ID@: @N_DAYS@ x 24 h of the design day, the same boundary
+// conditions as the Phase 1 baseline. chtMultiRegionFoam, solid regions concrete
+// and pcm; the PCM latent heat is the repository's fvOption.
+
+application     chtMultiRegionFoam;
+libs            ("libpcmEnthalpyPorosity.so");
+
+startFrom       latestTime;
+startTime       0;
+stopAt          endTime;
+endTime         @END_TIME@;
+deltaT          @DELTA_T@;
+
+writeControl    adjustableRunTime;
+writeInterval   @WRITE_INTERVAL@;
+purgeWrite      0;
+writeFormat     binary;
+writePrecision  10;
+writeCompression off;
+timeFormat      general;
+timePrecision   10;
+runTimeModifiable true;
+
+adjustTimeStep  no;
+maxCo           1;
+maxDi           1000;
+maxDeltaT       @DELTA_T@;
+
+functions
+{
+    // ---- surface temperatures (paper Figs. 7, 8) --------------------------
+    roofSurface
+    {
+        type            surfaceFieldValue;
+        libs            (fieldFunctionObjects);
+        region          concrete;
+        writeControl    adjustableRunTime;
+        writeInterval   @SAMPLE_INTERVAL@;
+        log             false;
+        writeFields     false;
+        regionType      patch;
+        name            roof;
+        operation       areaAverage;
+        fields          (T);
+    }
+
+    ceilingSurface
+    {
+        type            surfaceFieldValue;
+        libs            (fieldFunctionObjects);
+        region          concrete;
+        writeControl    adjustableRunTime;
+        writeInterval   @SAMPLE_INTERVAL@;
+        log             false;
+        writeFields     false;
+        regionType      patch;
+        name            ceiling;
+        operation       areaAverage;
+        fields          (T);
+    }
+
+    // ---- heat flow [W], positive INTO the concrete: roof, ceiling, and the
+    //      PCM interface (negative = heat going into the PCM) ---------------
+    surfaceHeatFlux
+    {
+        type            wallHeatFlux;
+        libs            (fieldFunctionObjects);
+        region          concrete;
+        patches         (roof ceiling concrete_to_pcm);
+        // v2406 writes the .dat in execute() and the full wallHeatFlux field in
+        // write(), whatever writeFields says: sample every SAMPLE_INTERVAL, write
+        // the field only with the other fields
+        executeControl  adjustableRunTime;
+        executeInterval @SAMPLE_INTERVAL@;
+        writeControl    writeTime;
+        log             false;
+        errors          warn;
+    }
+
+    // ---- stored heat (paper Eq. 7, Fig. 11) -------------------------------
+    slabAverage
+    {
+        type            volFieldValue;
+        libs            (fieldFunctionObjects);
+        region          concrete;
+        writeControl    adjustableRunTime;
+        writeInterval   @SAMPLE_INTERVAL@;
+        log             false;
+        writeFields     false;
+        regionType      all;
+        operation       volAverage;
+        fields          (T);
+    }
+
+    pcmAverage          // mean PCM temperature and liquid fraction
+    {
+        type            volFieldValue;
+        libs            (fieldFunctionObjects);
+        region          pcm;
+        writeControl    adjustableRunTime;
+        writeInterval   @SAMPLE_INTERVAL@;
+        log             false;
+        writeFields     false;
+        regionType      all;
+        operation       volAverage;
+        fields          (T liquidFraction);
+    }
+
+    // ---- T(z) on the slab axis, split by region ---------------------------
+    concreteProfile
+    {
+        type            probes;
+        libs            (sampling);
+        region          concrete;
+        writeControl    adjustableRunTime;
+        writeInterval   @PROFILE_INTERVAL@;
+        fields          (T);
+        probeLocations
+        (
+@PROBES_CONCRETE@
+        );
+    }
+
+    pcmProfile
+    {
+        type            probes;
+        libs            (sampling);
+        region          pcm;
+        writeControl    adjustableRunTime;
+        writeInterval   @PROFILE_INTERVAL@;
+        fields          (T liquidFraction);
+        probeLocations
+        (
+@PROBES_PCM@
+        );
+    }
+
+    // ---- sanity -----------------------------------------------------------
+    concreteTMinMax
+    {
+        type            fieldMinMax;
+        libs            (fieldFunctionObjects);
+        region          concrete;
+        fields          (T);
+        mode            magnitude;
+        location        false;
+        writeControl    adjustableRunTime;
+        writeInterval   @SAMPLE_INTERVAL@;
+    }
+
+    pcmTMinMax
+    {
+        type            fieldMinMax;
+        libs            (fieldFunctionObjects);
+        region          pcm;
+        fields          (T);
+        mode            magnitude;
+        location        false;
+        writeControl    adjustableRunTime;
+        writeInterval   @SAMPLE_INTERVAL@;
+    }
+
+    concreteResiduals
+    {
+        type            solverInfo;
+        libs            (utilityFunctionObjects);
+        region          concrete;
+        fields          (h);
+        writeControl    timeStep;
+        writeInterval   20;
+    }
+
+    pcmResiduals
+    {
+        type            solverInfo;
+        libs            (utilityFunctionObjects);
+        region          pcm;
+        fields          (h);
+        writeControl    timeStep;
+        writeInterval   20;
+    }
+}
+
+// ************************************************************************* //

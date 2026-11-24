@@ -1,0 +1,21 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/pcm_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      fvSolution;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// The latent heat is Newton-linearised in T; the outer correctors converge it
+// (tests/test_latent_source_1d.py, and the OM37 time-step check in roof/).
+PIMPLE
+{
+    nOuterCorrectors    @N_OUTER@;
+}
+
+// ************************************************************************* //

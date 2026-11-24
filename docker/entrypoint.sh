@@ -8,8 +8,14 @@ if ! whoami >/dev/null 2>&1; then
 fi
 export USER="$(whoami)"
 
+# OpenFOAM's bashrc reads its own arguments (name=value settings, or files to
+# source): hide the container command from it, or e.g. `bash script.sh` would
+# have script.sh sourced inside the bashrc.
+cmd=("$@")
+set --
 # shellcheck disable=SC1090
 source "/usr/lib/openfoam/openfoam${OF_VERSION}/etc/bashrc"
+set -- "${cmd[@]}"
 
 if [ -x /work/openfoam/Allwmake ] \
    && [ ! -f "$FOAM_USER_LIBBIN/libpcmEnthalpyPorosity.so" ]; then

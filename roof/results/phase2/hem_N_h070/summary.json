@@ -1,0 +1,88 @@
+{
+  "run": "/work/roof/runs/hem_N_h070",
+  "case_id": "hem_N_h070",
+  "passed": true,
+  "gates": {
+    "complete": {
+      "pass": true,
+      "value": 259200.0,
+      "limit": 259200.0,
+      "unit": "s",
+      "note": "last sampled time vs endTime"
+    },
+    "periodic": {
+      "pass": true,
+      "value": 0.00839607000000342,
+      "limit": 0.05,
+      "unit": "K",
+      "note": "max |T(t) - T(t - 24 h)|, roof and ceiling surfaces and mean PCM"
+    },
+    "energy": {
+      "pass": true,
+      "value": -5.567557526042288e-05,
+      "limit": 0.01,
+      "unit": "-",
+      "note": "(roof in - ceiling out - stored) / gross roof heat flow"
+    }
+  },
+  "metrics": {
+    "analysed_window_s": [
+      172800.0,
+      259200.0
+    ],
+    "T_roof_C": {
+      "max": 55.05447570000001,
+      "at_h": 14.5,
+      "min": 26.580763939999997,
+      "at_h_min": 5.666666666666667
+    },
+    "T_ceiling_C": {
+      "max": 40.80805024,
+      "at_h": 17.333333333333332,
+      "min": 27.83494354000004,
+      "at_h_min": 7.583333333333333,
+      "mean": 34.25427066916957
+    },
+    "T_solair_C": {
+      "max": 70.256028,
+      "at_h": 13.166666666666666,
+      "min": 23.101092
+    },
+    "decrement_factor": 0.2751166219375202,
+    "time_lag_h": 4.166666666666666,
+    "q_ceiling_gain_W_m2": {
+      "max": 90.7733479712,
+      "at_h": 17.333333333333332,
+      "min": 11.248203900200247,
+      "at_h_min": 7.583333333333333,
+      "mean": 50.59820630814371
+    },
+    "daily_Wh_m2": {
+      "roof_in": 1214.1717888312407,
+      "ceiling_gain_net": 1214.356951395449,
+      "cooling_load": 1214.356951395449,
+      "heating_load": 0.0,
+      "total_load": 1214.356951395449,
+      "stored_change": -0.011107996318886183
+    },
+    "pcm": {
+      "liquid_fraction": {
+        "min": 0.0,
+        "max": 0.50734048676,
+        "mean": 0.19590215293113777,
+        "daily_swing": 0.50734048676
+      },
+      "T_mean_C": {
+        "min": 28.91888696000001,
+        "max": 40.29367674000002
+      },
+      "latent_cycled_Wh_m2": 173.16444565812475,
+      "heat_into_pcm_Wh_m2": 234.80055107022037
+    },
+    "wallHeatFlux_vs_bc_W_m2": {
+      "roof_max_abs": 0.0008500733338223654,
+      "ceiling_max_abs": 3.098886125485478e-08,
+      "note": "diagnostic, not a gate"
+    }
+  }
+}

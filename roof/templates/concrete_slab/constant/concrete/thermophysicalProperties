@@ -1,0 +1,35 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/concrete_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant/concrete";
+    object      thermophysicalProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// M20 RCC, constant properties (config: materials.concrete). The paper gives no
+// concrete values; these are ECBC 2017 / SP 41 "reinforced concrete".
+thermoType
+{
+    type            heSolidThermo;
+    mixture         pureMixture;
+    transport       constIso;
+    thermo          hConst;
+    equationOfState rhoConst;
+    specie          specie;
+    energy          sensibleEnthalpy;
+}
+
+mixture
+{
+    specie          { molWeight 100; }
+    transport       { kappa @K_CONCRETE@; }
+    thermodynamics  { Hf 0; Cp @CP_CONCRETE@; }
+    equationOfState { rho @RHO_CONCRETE@; }
+}
+
+// ************************************************************************* //

@@ -1,0 +1,46 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/pcm_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system/pcm";
+    object      fvSchemes;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+ddtSchemes
+{
+    default         Euler;
+}
+
+gradSchemes
+{
+    default         Gauss linear;
+}
+
+divSchemes
+{
+    default         none;
+}
+
+// The block mesh is orthogonal (no correction applied); the limited correction
+// is for the snapped meshes of Phase 2.
+laplacianSchemes
+{
+    default         Gauss linear limited corrected 0.5;
+}
+
+interpolationSchemes
+{
+    default         linear;
+}
+
+snGradSchemes
+{
+    default         limited corrected 0.5;
+}
+
+// ************************************************************************* //

@@ -1,0 +1,63 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/concrete_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    location    "0/concrete";
+    object      T;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Initial state: uniform, the mid-depth temperature of the steady profile under
+// the daily-mean conditions. The first run.n_days - 1 days wash it out.
+dimensions      [0 0 0 1 0 0 0];
+
+internalField   uniform @T0@;
+
+boundaryField
+{
+    // Outdoor face. q_in = h_out (T_sa - T_s): sol-air temperature T_sa(t) =
+    // T_out + a I / h_out - eps dR / h_out (ASHRAE), tabulated for every day of
+    // the run (roofpipe/weather.py; runs/<case>/boundary_conditions.csv).
+    roof
+    {
+        type            externalWallHeatFluxTemperature;
+        mode            coefficient;
+        Ta              table
+        (
+@TA_ROOF@
+        );
+        h               uniform @H_OUT@;
+        kappaMethod     solidThermo;
+        value           uniform @T0@;
+    }
+
+    // Indoor face, indoor.mode = @INDOOR_MODE@. q_gain = h_in (T_s - T_in):
+    // conditioned room (T_in = T_set), ventilated room (T_in = T_out + offset)
+    // or the paper's test rig (insulation in series with h_in, shaded outdoor
+    // air below).
+    ceiling
+    {
+        type            externalWallHeatFluxTemperature;
+        mode            coefficient;
+        Ta              table
+        (
+@TA_CEILING@
+        );
+        h               uniform @H_IN@;
+        kappaMethod     solidThermo;
+        value           uniform @T0@;
+    }
+
+    // Adiabatic: insulated sides of the test unit, or the symmetry planes of a
+    // repeated slab.
+    sides
+    {
+        type            zeroGradient;
+    }
+}
+
+// ************************************************************************* //

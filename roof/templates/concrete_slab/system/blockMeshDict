@@ -1,0 +1,67 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/concrete_slab). Placeholders between
+  at-signs are filled from roof/config/roof.yaml by `python3 -m roofpipe baseline`
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Unit cell of the roof slab (Abass & Muthulingam 2024, Sec. 2.4, Fig. 4):
+// Lx x Ly footprint, depth H. z = 0 is the ceiling (indoor) face, z = H the
+// roof (outdoor) face. The slab centre is on the z axis.
+// After blockMesh the mesh is copied to constant/concrete/polyMesh (region `concrete`).
+
+scale   1;
+
+vertices
+(
+    (@X0@ @Y0@ 0)
+    (@X1@ @Y0@ 0)
+    (@X1@ @Y1@ 0)
+    (@X0@ @Y1@ 0)
+    (@X0@ @Y0@ @H@)
+    (@X1@ @Y0@ @H@)
+    (@X1@ @Y1@ @H@)
+    (@X0@ @Y1@ @H@)
+);
+
+blocks
+(
+    hex (0 1 2 3 4 5 6 7) (@NX@ @NY@ @NZ@) simpleGrading (1 1 1)
+);
+
+edges
+(
+);
+
+// All three are `wall` patches: the wallHeatFlux function object only reports walls.
+boundary
+(
+    roof
+    {
+        type    wall;
+        faces   ((4 5 6 7));
+    }
+    ceiling
+    {
+        type    wall;
+        faces   ((0 3 2 1));
+    }
+    sides                       // adiabatic: insulated sides of the test unit (Sec. 2.4),
+    {                           // or the symmetry planes of a repeated slab
+        type    wall;
+        faces   ((0 1 5 4) (1 2 6 5) (2 3 7 6) (3 0 4 7));
+    }
+);
+
+mergePatchPairs
+(
+);
+
+// ************************************************************************* //

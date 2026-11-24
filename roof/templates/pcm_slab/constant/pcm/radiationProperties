@@ -1,0 +1,19 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/pcm_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant/pcm";
+    object      radiationProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// No radiation inside the slab: the roof face carries solar and long-wave
+// exchange in its sol-air boundary condition (0/concrete/T).
+radiation       off;
+radiationModel  none;
+
+// ************************************************************************* //

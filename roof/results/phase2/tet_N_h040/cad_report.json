@@ -1,0 +1,19 @@
+{
+  "case_id": "tet_N_h040",
+  "volume_ml_occ": 410.5014400690664,
+  "volume_ml_stl": 410.50144006906635,
+  "volume_ml_analytic": 410.50144006906635,
+  "occ_vs_analytic": 2.220446049250313e-16,
+  "stl_vs_analytic": 0.0,
+  "surface_area_cm2_occ": 654.8400800519951,
+  "stl_triangles": 4,
+  "concrete_volume_ml": 13089.498559930931,
+  "bounding_box_mm": [
+    -133.32379296095402,
+    133.32379296095402,
+    -115.46179163308311,
+    115.46179163308311,
+    25.0,
+    65.0
+  ]
+}

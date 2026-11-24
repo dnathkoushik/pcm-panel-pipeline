@@ -1,0 +1,32 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/pcm_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Used only while meshing: scripts/run_pcm_case.sh puts it in place of
+// system/controlDict for blockMesh .. splitMeshRegions, then restores the solver's.
+
+application     snappyHexMesh;
+startFrom       startTime;
+startTime       0;
+stopAt          endTime;
+endTime         1;
+deltaT          1;
+writeControl    timeStep;
+writeInterval   1;
+writeFormat     binary;
+writePrecision  12;
+writeCompression off;
+timeFormat      general;
+timePrecision   6;
+runTimeModifiable false;
+
+// ************************************************************************* //
