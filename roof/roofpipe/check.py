@@ -86,6 +86,18 @@ def scalar_series(case_dir: str, fo_name: str, pattern: str) -> dict:
     return out
 
 
+def multi_series(case_dir: str, fo_name: str, pattern: str) -> dict:
+    """{time: [values...]} of a function object with several columns."""
+    out = {}
+    for p in _files(case_dir, fo_name, pattern):
+        for tok in _rows(p)[1]:
+            try:
+                out[round(float(tok[0]), 3)] = [float(v) for v in tok[1:]]
+            except (ValueError, IndexError):
+                continue
+    return out
+
+
 def wall_heat_flux(case_dir: str) -> dict:
     """{(time, patch): integral heat flow [W] into the region}, from wallHeatFlux."""
     out = {}
@@ -131,7 +143,10 @@ def evaluate(run_dir: str) -> dict:
     with open(os.path.join(run_dir, "case_meta.json"), encoding="utf-8") as f:
         meta = json.load(f)
     bc = _read_csv(os.path.join(run_dir, "boundary_conditions.csv"))
-    ref = _read_csv(os.path.join(run_dir, "reference_1d.csv"))
+    ref_path = os.path.join(run_dir, "reference_1d.csv")
+    ref = _read_csv(ref_path) if os.path.exists(ref_path) else None
+    pcm_case = meta.get("kind") == "pcm_embedded"
+    pcm_avg = multi_series(case_dir, "pcmAverage", "volFieldValue*.dat") if pcm_case else {}
     f_sa = slab1d.table_function(bc["time_s"], bc["T_solair_C"])
     f_in = slab1d.table_function(bc["time_s"], bc["T_indoor_C"])
     f_out = slab1d.table_function(bc["time_s"], bc["T_out_C"])
@@ -163,18 +178,29 @@ def evaluate(run_dir: str) -> dict:
     # ---- periodicity
     prev = [t for t in day if round(t - DAY_S, 3) in T_roof and round(t - DAY_S, 3) in T_ceil]
     if t0 >= DAY_S - 1e-6 and len(prev) == len(day):
-        dev = max(max(abs(T_roof[t] - T_roof[round(t - DAY_S, 3)]),
-                      abs(T_ceil[t] - T_ceil[round(t - DAY_S, 3)])) for t in day)
-        gates["periodic"] = _gate(dev <= PERIODIC_K, dev, PERIODIC_K, "K",
-                                  "max |T_s(t) - T_s(t - 24 h)|, roof and ceiling")
+        def back(series, t):
+            return series.get(round(t - DAY_S, 3))
+        dev = max(max(abs(T_roof[t] - back(T_roof, t)), abs(T_ceil[t] - back(T_ceil, t)))
+                  for t in day)
+        note = "max |T(t) - T(t - 24 h)|, roof and ceiling surfaces"
+        if pcm_avg and all(t in pcm_avg and back(pcm_avg, t) for t in day):
+            dev = max(dev, max(abs(pcm_avg[t][0] - back(pcm_avg, t)[0]) for t in day))
+            note += " and mean PCM"
+        gates["periodic"] = _gate(dev <= PERIODIC_K, dev, PERIODIC_K, "K", note)
     else:
         gates["periodic"] = _gate(None, None, PERIODIC_K, "K", "less than two days computed")
 
-    # ---- 1D reference (every common sample of the run)
-    rT = {round(t, 3): (a, b_) for t, a, b_ in zip(ref["time_s"], ref["T_roof_C"],
-                                                   ref["T_ceiling_C"])}
+    # ---- 1D reference (every common sample of the run); the pure slab only
+    rT, rq = {}, {}
+    if ref is not None:
+        rT = {round(t, 3): (a, b_) for t, a, b_ in zip(ref["time_s"], ref["T_roof_C"],
+                                                       ref["T_ceiling_C"])}
+        rq = {round(t, 3): (q1, q2) for t, q1, q2 in zip(ref["time_s"], ref["q_roof_in_W_m2"],
+                                                         ref["q_ceiling_gain_W_m2"])}
     common = [t for t in times if t in rT]
-    if common:
+    if ref is None:
+        pass                    # PCM cases: no 1D solution, the gate does not apply
+    elif common:
         dev = max(max(abs(T_roof[t] - 273.15 - rT[t][0]), abs(T_ceil[t] - 273.15 - rT[t][1]))
                   for t in common)
         gates["reference"] = _gate(dev <= REFERENCE_K, dev, REFERENCE_K, "K",
@@ -185,8 +211,6 @@ def evaluate(run_dir: str) -> dict:
     # ---- last-day series
     clock0 = tm.get("start_clock_h", 0.0)
     rows = []
-    rq = {round(t, 3): (q1, q2) for t, q1, q2 in zip(ref["time_s"], ref["q_roof_in_W_m2"],
-                                                     ref["q_ceiling_gain_W_m2"])}
     k_eff = 1.0 / (1.0 / b["h_out"] + H / c["k"] + 1.0 / b["h_in"])   # paper Eq. 4, plain slab
     for t in day:
         Tr, Tc = T_roof[t] - 273.15, T_ceil[t] - 273.15
@@ -208,6 +232,12 @@ def evaluate(run_dir: str) -> dict:
             "whf_ceiling_gain_W_m2": (-whf[(t, "ceiling")] / area if (t, "ceiling") in whf
                                       else float("nan")),
         }
+        if pcm_case:
+            pa = pcm_avg.get(t, [float("nan"), float("nan")])
+            row["T_pcm_C"] = pa[0] - 273.15
+            row["liquid_fraction"] = pa[1]
+            row["q_into_pcm_W_m2"] = (-whf[(t, "concrete_to_pcm")] / area
+                                      if (t, "concrete_to_pcm") in whf else float("nan"))
         rows.append(row)
 
     ts = [r["time_s"] for r in rows]
@@ -222,8 +252,16 @@ def evaluate(run_dir: str) -> dict:
     heating = max(0.0, -_trapz(ts, [min(q, 0.0) for q in q_g]) * Wh)
 
     # ---- energy balance of the analysed day
-    if day[0] in T_mean and day[-1] in T_mean:
-        stored = c["rho"] * c["cp"] * H * (T_mean[day[-1]] - T_mean[day[0]]) * Wh
+    ok_pcm = not pcm_case or (day[0] in pcm_avg and day[-1] in pcm_avg and "meshed" in meta)
+    if day[0] in T_mean and day[-1] in T_mean and ok_pcm:
+        V_c = meta["meshed"]["concrete_volume_m3"] if pcm_case else area * H
+        stored = c["rho"] * c["cp"] * V_c * (T_mean[day[-1]] - T_mean[day[0]]) / area * Wh
+        if pcm_case:
+            pm, ms = meta["pcm"], meta["meshed"]
+            m_p = ms["rho_pcm_used"] * ms["pcm_volume_m3"]
+            cp_p = 0.5 * (pm["cp_solid"] + pm["cp_liquid"])
+            a, z = pcm_avg[day[0]], pcm_avg[day[-1]]
+            stored += m_p * (cp_p * (z[0] - a[0]) + pm["L"] * (z[1] - a[1])) / area * Wh
         resid = (roof_in - gain - stored) / gross if gross > 0 else float("nan")
         gates["energy"] = _gate(abs(resid) <= ENERGY_FRAC, resid, ENERGY_FRAC, "-",
                                 "(roof in - ceiling out - stored) / gross roof heat flow")
@@ -260,12 +298,26 @@ def evaluate(run_dir: str) -> dict:
           if r["whf_roof_in_W_m2"] == r["whf_roof_in_W_m2"]]
     wc = [abs(r["whf_ceiling_gain_W_m2"] - r["q_ceiling_gain_W_m2"]) for r in rows
           if r["whf_ceiling_gain_W_m2"] == r["whf_ceiling_gain_W_m2"]]
+    if pcm_case:
+        lf = [r["liquid_fraction"] for r in rows]
+        Tp = [r["T_pcm_C"] for r in rows]
+        qp = [r["q_into_pcm_W_m2"] for r in rows]
+        metrics["pcm"] = {
+            "liquid_fraction": {"min": min(lf), "max": max(lf), "mean": sum(lf) / len(lf),
+                                "daily_swing": max(lf) - min(lf)},
+            "T_mean_C": {"min": min(Tp), "max": max(Tp)},
+            "latent_cycled_Wh_m2": (max(lf) - min(lf)) * meta["meshed"]["rho_pcm_used"]
+            * meta["meshed"]["pcm_volume_m3"] * meta["pcm"]["L"] / area * Wh
+            if "meshed" in meta else None,
+            "heat_into_pcm_Wh_m2": (_trapz(ts, [max(q, 0.0) for q in qp]) * Wh
+                                    if all(q == q for q in qp) else None),
+        }
     metrics["wallHeatFlux_vs_bc_W_m2"] = {"roof_max_abs": max(wr) if wr else None,
                                           "ceiling_max_abs": max(wc) if wc else None,
                                           "note": "diagnostic, not a gate"}
     passed = all(g["pass"] for g in gates.values())
-    return {"run": run_dir, "passed": passed, "gates": gates, "metrics": metrics,
-            "rows": rows}
+    return {"run": run_dir, "case_id": meta.get("case_id"), "passed": passed, "gates": gates,
+            "metrics": metrics, "rows": rows}
 
 
 def _plot(res: dict, path: str) -> bool:
@@ -278,12 +330,20 @@ def _plot(res: dict, path: str) -> bool:
     rows = res["rows"]
     h = [r["hour"] for r in rows]
     col = lambda k: [r[k] for r in rows]          # noqa: E731
-    fig, (a1, a2) = plt.subplots(2, 1, figsize=(8, 7), sharex=True)
+    has_pcm = "liquid_fraction" in rows[0]
+    if has_pcm:
+        fig, (a1, a2, a3) = plt.subplots(3, 1, figsize=(8, 9), sharex=True,
+                                         gridspec_kw={"height_ratios": [3, 3, 1.6]})
+    else:
+        fig, (a1, a2) = plt.subplots(2, 1, figsize=(8, 7), sharex=True)
+        a3 = None
     a1.plot(h, col("T_solair_C"), color="#e6550d", lw=1.2, label="sol-air")
     a1.plot(h, col("T_out_C"), color="#636363", lw=1.0, ls="--", label="outdoor air")
     a1.plot(h, col("T_roof_C"), color="#b30000", lw=2.0, label="roof surface (CFD)")
     a1.plot(h, col("T_ceiling_C"), color="#08519c", lw=2.0, label="ceiling surface (CFD)")
-    a1.plot(h, col("ref_T_ceiling_C"), color="k", lw=0.8, ls=":", label="ceiling, 1D reference")
+    if any(v == v for v in col("ref_T_ceiling_C")):          # the pure slab only
+        a1.plot(h, col("ref_T_ceiling_C"), color="k", lw=0.8, ls=":",
+                label="ceiling, 1D reference")
     a1.plot(h, col("T_indoor_C"), color="#6baed6", lw=1.0, label="indoor ambient")
     a1.set_ylabel("Temperature (°C)")
     a1.legend(fontsize=8, ncol=2)
@@ -291,11 +351,18 @@ def _plot(res: dict, path: str) -> bool:
     a2.plot(h, col("q_ceiling_gain_W_m2"), color="#08519c", lw=2.0, label="ceiling -> room (gain)")
     a2.axhline(0.0, color="k", lw=0.5)
     a2.set_ylabel("Heat flux (W/m²)")
-    a2.set_xlabel("Clock time on the analysed day (h, IST)")
-    a2.set_xticks(range(int(h[0]), int(h[0]) + 25, 3))
     a2.legend(fontsize=8)
+    last = a2
+    if a3 is not None:           # its own panel: one y-scale per axes
+        a3.plot(h, col("liquid_fraction"), color="#1baf7a", lw=2.0)
+        a3.set_ylim(0, 1)
+        a3.set_ylabel("PCM liquid\nfraction (-)")
+        last = a3
+    last.set_xlabel("Clock time on the analysed day (h, IST)")
+    last.set_xticks(range(int(h[0]), int(h[0]) + 25, 3))
     ok = "all gates pass" if res["passed"] else "GATES FAILED"
-    a1.set_title(f"Phase 1 pure concrete slab, last simulated day ({ok})", fontsize=10)
+    what = res.get("case_id") or "pure concrete slab"
+    a1.set_title(f"{what}: last simulated day ({ok})", fontsize=10)
     fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)
@@ -317,7 +384,7 @@ def main(run_dir: str, plot: bool = True) -> int:
     res["rows"] = rows
     plotted = plot and _plot(res, os.path.join(out, "quicklook.png"))
 
-    print(f"Phase 1 check: {run_dir}")
+    print(f"Check: {run_dir}")
     for name, g in res["gates"].items():
         state = {True: "PASS", False: "FAIL", None: "n/a "}[g["pass"]]
         val = "-" if g["value"] is None else f"{g['value']:.4g}"
@@ -331,7 +398,14 @@ def main(run_dir: str, plot: bool = True) -> int:
     print(f"  ceiling gain {m['q_ceiling_gain_W_m2']['min']:.1f} .. "
           f"{m['q_ceiling_gain_W_m2']['max']:.1f} W/m2; daily cooling load "
           f"{d['cooling_load']:.0f} Wh/m2, heating load {d['heating_load']:.0f} Wh/m2")
+    if "pcm" in m:
+        p = m["pcm"]
+        print(f"  PCM liquid fraction {p['liquid_fraction']['min']:.3f} .. "
+              f"{p['liquid_fraction']['max']:.3f}, mean T {p['T_mean_C']['min']:.2f} .. "
+              f"{p['T_mean_C']['max']:.2f} C")
     print(f"  -> {out}/summary.json, timeseries_lastday.csv"
           + (", quicklook.png" if plotted else " (no matplotlib: no plot)"))
-    print("PHASE 1 PASSED" if res["passed"] else "PHASE 1 NOT PASSED: see the gates above")
+    phase = 2 if res.get("case_id") else 1
+    print(f"PHASE {phase} PASSED" if res["passed"]
+          else f"PHASE {phase} NOT PASSED: see the gates above")
     return 0 if res["passed"] else 1
