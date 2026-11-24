@@ -1,0 +1,103 @@
+# =============================================================================
+# Roof-embedded PCM study, after
+#   P. Jaffar Abass, S. Muthulingam (2024), "Comprehensive assessment of PCM
+#   integrated roof for passive building design: A study in energo-economics",
+#   Energy & Buildings 317, 114387, doi:10.1016/j.enbuild.2024.114387
+#
+# One unit cell of the roof slab: solid concrete, no air gap. Phase 1 is the pure
+# concrete slab (the paper's Ref-SU); Phase 2 embeds PCM panels in the SAME slab.
+#
+# Tags:  [PAPER]      value from the paper (section / table given)
+#        [SOURCE]     other reference, named
+#        [ASSUMPTION] not given in the paper: our choice, one line to change
+# Units: SI (m, K, W, J, kg, s) unless the key says otherwise (_C, _h, _min ...)
+# Floats need a dot for PyYAML: write 1.0e-8, not 1e-8.
+# Override any key for one run:  python3 -m roofpipe baseline --set indoor.mode=specimen
+# =============================================================================
+
+site:
+  name: "Rupnagar, Punjab"
+  lat_deg: 30.9661                # [PAPER] Sec. 2.1
+  lon_deg: 76.5231                # [PAPER] Sec. 2.1
+  utc_offset_h: 5.5               # IST
+  day_of_year: 156                # [ASSUMPTION] 5 June, middle of the paper's 1-10 June test (Sec. 3)
+
+weather:                          # one design day, repeated for every simulated day
+  T_max_C: 43.0                   # [PAPER] Sec. 2.1: summer average "43 C during the day ..."
+  T_min_C: 27.0                   # [PAPER] Sec. 2.1: "... to 27 C at night"
+                                  #   daily mean 35.0 C; NASA POWER June mean T2M is 35.1 C
+  t_Tmax_h: 15.0                  # [ASSUMPTION] clock time of the maximum; the minimum is at sunrise
+  daily_GHI_kWh_m2: 6.67          # [SOURCE] NASA POWER climatology 2001-2025, 30.9661 N 76.5231 E,
+                                  #   June all-sky global horizontal irradiation (clear-sky: 7.67).
+                                  #   Its annual mean, 5.22, is the figure quoted in Sec. 2.1.
+  irradiance_shape: ashrae_clear_sky
+                                  # ashrae_clear_sky: shape from the solar altitude (ASHRAE 1985
+                                  #   A, B, C clear-sky model); half_sine: sunrise to sunset.
+                                  #   Either shape is scaled to daily_GHI_kWh_m2.
+
+roof_surface:                     # outdoor face, z = H. Sol-air temperature (ASHRAE):
+                                  #   T_sa = T_out + a I / h_out - eps dR / h_out
+                                  #   q_in = a I - eps dR + h_out (T_out - T_s) = h_out (T_sa - T_s)
+  absorptance: 0.70               # [ASSUMPTION] weathered bare grey concrete (ASHRAE: 0.65-0.80)
+  h_out: 17.0                     # [SOURCE] ASHRAE Fundamentals, outer surface, convection +
+                                  #   long-wave [W/m2/K]; the paper's h_ext has no value
+  longwave_correction_K: 3.9      # [SOURCE] ASHRAE: eps dR / h_out for horizontal surfaces
+
+indoor:                           # ceiling face, z = 0
+  mode: conditioned               # conditioned: room held at T_set_C (thermal load = HVAC load)
+                                  # ventilated:  room air follows T_out + T_offset_K
+                                  # specimen:    the paper's test rig, insulation under the slab,
+                                  #              shaded outdoor air below it (Sec. 2.4)
+  h_in: 6.13                      # [SOURCE] ASHRAE, horizontal surface, heat flow downward,
+                                  #   convection + radiation [W/m2/K]; the paper's h_int has no value
+  T_set_C: 26.0                   # conditioned: [PAPER] Sec. 2.1, thermal comfort temperature
+  T_offset_K: 0.0                 # ventilated
+  insulation:                     # specimen: in series with h_in; its heat capacity is neglected
+    thickness: 0.025              # [ASSUMPTION] 175 mm mould depth - 150 mm slab (Sec. 2.4)
+    k: 0.034                      # [ASSUMPTION] extruded polystyrene
+
+slab:                             # unit cell, Sec. 2.4 and Fig. 4
+  Lx: 0.300                       # [PAPER]
+  Ly: 0.300                       # [PAPER]
+  H: 0.150                        # [PAPER] depth. Constant in EVERY case (Phase 2 constraint)
+
+materials:
+  concrete:                       # M20 RCC (Sec. 2.4); the two 10 mm rebar meshes are smeared in
+    k: 1.58                       # [SOURCE] ECBC 2017 / SP 41, reinforced concrete [W/m/K]
+    rho: 2288.0                   # [SOURCE] ECBC 2017 / SP 41 [kg/m3]
+    cp: 880.0                     # [SOURCE] ECBC 2017 / SP 41 [J/kg/K]
+                                  #   the paper gives no concrete values: replace with measured ones
+  # --- used from Phase 2 on (not read by the Phase 1 baseline) -------------
+  OM37:                           # organic, non-paraffin PCM
+    T_melt_C: 37.0                # [PAPER] Table 1, supplier (melting / freezing 37 / 36 C)
+    T_freeze_C: 36.0
+    dsc_melting_C: [36.4, 40.06, 44.06]       # [PAPER] Sec. 2.2: onset, peak, end (mean of 3)
+    dsc_solidification_C: [35.81, 33.81, 30.20]  # [PAPER] Sec. 2.2: onset, peak, end
+    latent_heat: 179000.0         # [PAPER] Table 1 (supplier); DSC mean 173910 (Sec. 2.2)
+    rho_liquid: 860.0             # [PAPER] Table 1
+    rho_solid: 973.0
+    cp_liquid: 2630.0             # [PAPER] Table 1
+    cp_solid: 2550.0
+    k_liquid: 0.13                # [PAPER] Table 1
+    k_solid: 0.16
+  Al1100:                         # void-former sheet, 1.3 mm (Sec. 2.3)
+    k: 222.0                      # [PAPER] Table 4
+    rho: 2710.0                   # [PAPER] Sec. 2.3
+    cp: 904.0                     # [PAPER] Table 4
+
+mesh:
+  cell_xy: 0.010                  # lateral cell size. The baseline is 1D; its lateral cells only
+                                  #   exercise the 3D set-up (30 x 30 columns)
+  cell_z: 0.0025                  # 60 cells through 150 mm; the daily penetration depth is ~150 mm
+
+run:
+  n_days: 3                       # 2 spin-up days + 1 analysed day (periodicity is checked)
+  start_clock_h: 0.0              # t = 0 is 00:00 IST of day 1
+  deltaT: 30.0                    # [s] fixed; implicit Euler, omega*dt = 2e-3
+  write_interval_h: 6.0           # full fields (restart, Phase 3 contours)
+  sample_interval_s: 300.0        # function-object time series (surface T, heat flux)
+  profile_interval_s: 3600.0      # T(z) through the slab centre
+  table_step_min: 10.0            # resolution of the boundary tables
+  energy_tolerance: 1.0e-8        # linear solver, h equation
+  n_procs: 8                      # default MPI ranks (the job script passes SLURM_NTASKS)
+  decomposition: scotch           # scotch | hierarchical | simple (both of the latter get n = (px py 1))
