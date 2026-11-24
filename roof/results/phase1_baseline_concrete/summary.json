@@ -1,0 +1,80 @@
+{
+  "run": "/work/roof/runs/baseline_concrete",
+  "passed": true,
+  "gates": {
+    "complete": {
+      "pass": true,
+      "value": 259200.0,
+      "limit": 259200.0,
+      "unit": "s",
+      "note": "last sampled time vs endTime"
+    },
+    "periodic": {
+      "pass": true,
+      "value": 0.014512289999970562,
+      "limit": 0.05,
+      "unit": "K",
+      "note": "max |T_s(t) - T_s(t - 24 h)|, roof and ceiling"
+    },
+    "reference": {
+      "pass": true,
+      "value": 1.3780000010399363e-05,
+      "limit": 0.05,
+      "unit": "K",
+      "note": "max |T_s - T_s,1D| over 864 samples"
+    },
+    "energy": {
+      "pass": true,
+      "value": 8.036734056713702e-08,
+      "limit": 0.01,
+      "unit": "-",
+      "note": "(roof in - ceiling out - stored) / gross roof heat flow"
+    }
+  },
+  "metrics": {
+    "analysed_window_s": [
+      172800.0,
+      259200.0
+    ],
+    "T_roof_C": {
+      "max": 55.12306990000002,
+      "at_h": 14.583333333333334,
+      "min": 26.15931366000001,
+      "at_h_min": 5.666666666666667
+    },
+    "T_ceiling_C": {
+      "max": 42.57110583000002,
+      "at_h": 17.25,
+      "min": 27.239624600000013,
+      "at_h_min": 7.416666666666667,
+      "mean": 34.51463931557095
+    },
+    "T_solair_C": {
+      "max": 70.256028,
+      "at_h": 13.166666666666666,
+      "min": 23.101092
+    },
+    "decrement_factor": 0.3251299340115743,
+    "time_lag_h": 4.083333333333334,
+    "q_ceiling_gain_W_m2": {
+      "max": 101.58087873790014,
+      "at_h": 17.25,
+      "min": 7.598898798000081,
+      "at_h_min": 7.416666666666667,
+      "mean": 52.205926886831215
+    },
+    "daily_Wh_m2": {
+      "roof_in": 1252.935521974574,
+      "ceiling_gain_net": 1252.9422452839492,
+      "cooling_load": 1252.9422452839492,
+      "heating_load": -0.0,
+      "total_load": 1252.9422452839492,
+      "stored_change": -0.006975730668606654
+    },
+    "wallHeatFlux_vs_bc_W_m2": {
+      "roof_max_abs": 0.0008500277785117305,
+      "ceiling_max_abs": 3.0699872866080113e-08,
+      "note": "diagnostic, not a gate"
+    }
+  }
+}
