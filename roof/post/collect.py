@@ -102,7 +102,9 @@ def label_end(ax, x, y, text, color):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--baseline", default="baseline_concrete")
+    ap.add_argument("--baseline", default=None,
+                    help="pure-slab run to compare with (default: the one with the PCM study's "
+                         "time step: baseline_concrete or baseline_dt<dt>)")
     ap.add_argument("--config", default=None)
     a = ap.parse_args()
     cfg = config.load(a.config)
@@ -110,6 +112,17 @@ def main():
     out = os.path.join(ROOF, "results", "phase3")
     os.makedirs(out, exist_ok=True)
 
+    if a.baseline is None:
+        dt = float(cfg["pcm_study"]["run"]["deltaT"])
+        for name in ("baseline_concrete", f"baseline_dt{dt:g}"):
+            r = load_run(runs, name)
+            if r is not None and abs(r["meta"]["time"]["deltaT_s"] - dt) < 1e-9:
+                a.baseline = name
+                break
+        else:
+            raise SystemExit(f"no pure-slab run with the PCM study's step ({dt:g} s): "
+                             f"python3 -m roofpipe baseline --name baseline_dt{dt:g} "
+                             f"--set run.deltaT={dt:g}, run it, then check it")
     base = load_run(runs, a.baseline)
     if base is None:
         raise SystemExit(f"no results for the baseline {a.baseline} in {runs}")

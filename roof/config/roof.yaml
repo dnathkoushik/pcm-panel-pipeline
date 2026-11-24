@@ -113,9 +113,11 @@ pcm_study:                        # Phase 2: 3 shapes x 2 orientations x 5 heigh
     n_cells_between_levels: 2
     stl_tolerance_mm: 0.05
   run:
-    deltaT: 30.0                  # [s] = the baseline's. roof/tests/om37_timestep.py against the
-                                  #   converged enthalpy method: liquid fraction within 0.001,
-                                  #   stored energy within 0.03 % (60 s: 0.002 / 0.06 %)
+    deltaT: 60.0                  # [s] roof/tests/om37_timestep.py against the converged enthalpy
+                                  #   method: liquid fraction within 0.002, stored energy within
+                                  #   0.06 % (30 s: 0.001 / 0.03 %). Half the cost of 30 s; the PCM
+                                  #   cases are compared with a baseline run at the same step
+                                  #   (baseline_dt60), see post/collect.py
     nOuterCorrectors: 2           # latent-heat Newton iterations per step (3 gives the same)
     write_interval_h: 3.0         # fields every 3 h: 9 on the analysed day for Phase 3 contours
 

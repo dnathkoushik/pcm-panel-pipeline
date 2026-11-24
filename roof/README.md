@@ -191,7 +191,7 @@ Every value is one line in `config/roof.yaml`.
 | PCM model | a solid region with conduction and latent heat: the repository's enthalpy fvOption `pcmEnthalpyPorositySource` with `latentConvection false`. Natural convection in the melt is neglected: heated from above, the melt lies on top of the solid (stable). No aluminium shell: the PCM touches the concrete |
 | Mesh | blockMesh 61 × 61 × 31 (≈ 4.9 mm), snappyHexMesh level 1 (2.5 mm) inside and on the PCM, level 2 (1.2 mm) on its edges; `splitMeshRegions -cellZones` makes the regions `concrete` and `pcm` with a conformal interface. The background counts keep every cell face off the base and apex planes. About 216,000 cells |
 | Equal mass | after meshing, `roofpipe finalize` scales the PCM density by V_exact / V_mesh (snapping changes the volume by up to ±0.2 %), so every shape at a height holds the same mass |
-| Time | as Phase 1: 3 days, Δt = 30 s, 2 outer correctors. `tests/om37_timestep.py`: within 0.001 in liquid fraction and 0.03 % in stored energy of the converged enthalpy method |
+| Time | 3 days, Δt = 60 s, 2 outer correctors. `tests/om37_timestep.py`: within 0.002 in liquid fraction and 0.06 % in stored energy of the converged enthalpy method (30 s: 0.001 / 0.03 %). The cases are compared with a pure slab run at the same step, `baseline_dt60`, which differs from the 30 s baseline by 0.01 K in peak ceiling temperature and 0.1 W/m² in peak gain |
 | Gates | complete; periodic (both surfaces and the mean PCM temperature, 0.05 K); energy balance including the PCM's sensible and latent heat (1 %) |
 
 The Phase 1 baseline is the reference for every case. Its 2.5 mm vertical cells against
@@ -210,8 +210,8 @@ DRY=1 bash slurm/phase2_submit_all.sh    # only print the sbatch lines
 bash slurm/phase2_submit_all.sh pyr_     # only some cases (ids containing "pyr_")
 ```
 
-A case is about 216,000 cells and takes 12 min on 4 cores of a workstation (2 h are
-requested). Cases that passed are skipped on resubmission; a stopped job continues.
+A case is about 216,000 cells and takes about 6 min on 4 cores of a workstation at
+Δt = 60 s (2 h are requested). Cases that passed are skipped on resubmission; a stopped job continues.
 
 On a workstation with Docker, from the repository root:
 
