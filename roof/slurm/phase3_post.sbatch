@@ -19,8 +19,9 @@
 #   mkdir -p logs && sbatch slurm/phase3_post.sbatch
 # PURGE=1 also deletes each case's field folders after extraction (keeps 0 and the
 # latest): a finished case is then a few MB.
-# pvpython: PVPYTHON (default: pvpython; e.g. "xvfb-run -a pvpython" on a headless
-# node, or a ParaView module loaded in slurm/env.sh's PYTHON_MODULE line).
+# pvpython: PVPYTHON (default: pvpython, from a ParaView module you add to
+# PYTHON_MODULE in slurm/env.sh). Without a display post/pvpython_headless.sh starts a
+# private Xvfb; an offscreen ParaView build (EGL/OSMesa) needs none.
 set -euo pipefail
 
 cd "${SLURM_SUBMIT_DIR:-.}"
@@ -43,7 +44,8 @@ for d in "$runs"/baseline_concrete "$runs"/*_[NI]_h[0-9][0-9][0-9]; do
         continue
     fi
     echo "== $(basename "$d")"
-    foam "${pv[@]}" post/pv_extract.py "$d" ${purge[@]+"${purge[@]}"} \
+    PVPYTHON="${pv[*]}" foam bash post/pvpython_headless.sh post/pv_extract.py "$d" \
+        ${purge[@]+"${purge[@]}"} \
         || echo "warning: pv_extract failed for $d" >&2
     n=$((n + 1))
 done
