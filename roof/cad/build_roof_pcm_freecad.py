@@ -27,7 +27,7 @@ import sys
 
 import FreeCAD as App  # noqa: F401  (provided by freecadcmd)
 import Part
-from FreeCAD import Matrix, Vector
+from FreeCAD import Vector
 
 
 def pyramid(poly, z_base, apex):
@@ -43,16 +43,25 @@ def pyramid(poly, z_base, apex):
 
 
 def half_spheroid(cx, cy, z_base, r, h, up):
-    s = Part.makeSphere(r)
-    m = Matrix()
-    m.scale(1.0, 1.0, h / r)
-    s = s.transformGeometry(m)
-    pad = 1.0
-    z0 = 0.0 if up else -(h + pad)
-    box = Part.makeBox(2 * (r + pad), 2 * (r + pad), h + pad, Vector(-(r + pad), -(r + pad), z0))
-    half = s.common(box).removeSplitter()
-    half.translate(Vector(cx, cy, z_base))
-    return half
+    """Exact half-spheroid: the quarter ellipse x^2/r^2 + z^2/h^2 = 1 (x, z >= 0) closed on
+    the axes and revolved about z. (A sphere scaled with transformGeometry becomes a
+    B-spline approximation, 0.2 % short in volume.)"""
+    O, P, Q = Vector(0, 0, 0), Vector(r, 0, 0), Vector(0, 0, h)
+    if abs(h - r) < 1e-9 * r:                                        # true hemisphere
+        c = math.sqrt(0.5)
+        arc = Part.Arc(P, Vector(r * c, 0, r * c), Q).toShape()
+    elif h < r:
+        arc = Part.Ellipse(P, Q, O).toShape(0.0, 0.5 * math.pi)     # major along x
+    else:
+        arc = Part.Ellipse(Q, P, O).toShape(0.0, 0.5 * math.pi)     # major along z
+    wire = Part.Wire(Part.__sortEdges__([arc, Part.makeLine(Q, O), Part.makeLine(O, P)]))
+    solid = Part.Face(wire).revolve(O, Vector(0, 0, 1), 360.0)
+    if solid.ShapeType != "Solid":
+        solid = Part.Solid(Part.Shell(solid.Faces))
+    if not up:
+        solid = solid.mirror(O, Vector(0, 0, 1))
+    solid.translate(Vector(cx, cy, z_base))
+    return solid
 
 
 def stl_volume_and_write(shape, path, name, tol_mm):

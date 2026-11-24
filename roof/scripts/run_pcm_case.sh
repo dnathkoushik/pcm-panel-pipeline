@@ -12,6 +12,7 @@
 #   5. prune   field folders before the analysed (last) day, except 0
 #
 # Idempotent like run_slab_case.sh: what exists is not redone, the solver continues.
+# MESH_ONLY=1 stops after the mesh and the PCM mass (to inspect a geometry).
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 roof="$(dirname "$here")"
@@ -86,7 +87,12 @@ if ! grep -q '"meshed"' "$run_dir/case_meta.json"; then
     (cd "$roof" && python3 -m roofpipe finalize "$run_dir")
 fi
 
-# ---- 3./4. solve
+if [ -n "${MESH_ONLY:-}" ]; then
+    echo "[$(date '+%F %T')] $name: meshed (MESH_ONLY set, not solving)"
+    exit 0
+fi
+
+# ---- 4. solve
 bash "$roof/scripts/run_slab_case.sh" "$case_dir" "$np"
 
 # ---- 5. keep only the analysed day's fields (and 0)
