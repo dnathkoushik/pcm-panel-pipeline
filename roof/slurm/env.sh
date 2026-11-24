@@ -39,18 +39,26 @@ _roof_relaxed() {
     return $_status
 }
 
+# Source a file with NO positional arguments: OpenFOAM's bashrc reads its arguments
+# as name=value settings and as further files to source.
+_roof_source() {
+    local _file=$1
+    set --
+    # shellcheck disable=SC1090
+    source "$_file"
+}
+
 _roof_module() {
+    local _names=("$@") f
     if ! type module >/dev/null 2>&1; then
-        local f
         for f in /etc/profile.d/modules.sh /etc/profile.d/lmod.sh /usr/share/lmod/lmod/init/bash; do
             if [ -f "$f" ]; then
-                # shellcheck disable=SC1090
-                source "$f"
+                _roof_source "$f"
                 break
             fi
         done
     fi
-    module load "$@"
+    module load "${_names[@]}"
 }
 
 if [ -n "$PYTHON_MODULE" ]; then
@@ -59,7 +67,7 @@ if [ -n "$PYTHON_MODULE" ]; then
 fi
 
 if [ -n "$OPENFOAM_BASHRC" ]; then
-    _roof_relaxed source "$OPENFOAM_BASHRC"
+    _roof_relaxed _roof_source "$OPENFOAM_BASHRC"
     foam() { "$@"; }
 elif [ -n "$OPENFOAM_MODULE" ]; then
     # shellcheck disable=SC2086
@@ -68,7 +76,7 @@ elif [ -n "$OPENFOAM_MODULE" ]; then
     if [ -z "${WM_PROJECT_DIR:-}" ]; then
         for _roof_f in "${FOAM_BASH:-}" "${FOAM_BASHRC:-}"; do
             if [ -n "$_roof_f" ] && [ -f "$_roof_f" ]; then
-                _roof_relaxed source "$_roof_f"
+                _roof_relaxed _roof_source "$_roof_f"
                 break
             fi
         done
@@ -81,13 +89,19 @@ elif [ -n "$PCM_SIF" ]; then
         return 1
     fi
     export ROOF_APPTAINER
-    # Inside the image: source its OpenFOAM, and hide the job's SLURM/PMI variables so
-    # that the container's own mpirun starts the ranks on this node (it has no srun).
+    # Inside the image: source its OpenFOAM (with the command hidden from it: the
+    # bashrc reads its arguments as settings and files to source), and hide the job's
+    # SLURM/PMI variables so that the container's own mpirun starts the ranks on this
+    # node (the image has no srun).
     foam() {
         # shellcheck disable=SC2016
         "$ROOF_APPTAINER" exec ${ROOF_BIND:+--bind "$ROOF_BIND"} "$PCM_SIF" bash -c '
             set +u
-            source "$0" >/dev/null 2>&1
+            bashrc=$0
+            cmd=("$@")
+            set --
+            source "$bashrc" >/dev/null 2>&1
+            set -- "${cmd[@]}"
             for v in $(compgen -e); do
                 case $v in SLURM_*|PMI_*|PMIX_*) unset "$v" ;; esac
             done
