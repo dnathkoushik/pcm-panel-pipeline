@@ -83,9 +83,12 @@ functions
         libs            (fieldFunctionObjects);
         region          concrete;
         patches         (roof ceiling);
-        writeControl    adjustableRunTime;
-        writeInterval   @SAMPLE_INTERVAL@;
-        writeFields     false;
+        // v2406 writes the .dat in execute() and the full wallHeatFlux field in
+        // write(), whatever writeFields says: sample every SAMPLE_INTERVAL, write
+        // the field only with the other fields
+        executeControl  adjustableRunTime;
+        executeInterval @SAMPLE_INTERVAL@;
+        writeControl    writeTime;
         log             false;
         errors          warn;           // diagnostic only: never stop the run
     }

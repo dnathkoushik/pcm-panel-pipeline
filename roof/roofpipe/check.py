@@ -219,7 +219,7 @@ def evaluate(run_dir: str) -> dict:
     gross = _trapz(ts, [abs(q) for q in q_in]) * Wh
     gain = _trapz(ts, q_g) * Wh
     cooling = _trapz(ts, [max(q, 0.0) for q in q_g]) * Wh
-    heating = -_trapz(ts, [min(q, 0.0) for q in q_g]) * Wh
+    heating = max(0.0, -_trapz(ts, [min(q, 0.0) for q in q_g]) * Wh)
 
     # ---- energy balance of the analysed day
     if day[0] in T_mean and day[-1] in T_mean:
