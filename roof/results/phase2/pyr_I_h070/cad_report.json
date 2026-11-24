@@ -1,0 +1,19 @@
+{
+  "case_id": "pyr_I_h070",
+  "volume_ml_occ": 718.3775201208665,
+  "volume_ml_stl": 718.3775201208663,
+  "volume_ml_analytic": 718.3775201208663,
+  "occ_vs_analytic": 2.220446049250313e-16,
+  "stl_vs_analytic": 0.0,
+  "surface_area_cm2_occ": 701.7433068658813,
+  "stl_triangles": 6,
+  "concrete_volume_ml": 12781.62247987913,
+  "bounding_box_mm": [
+    -87.73198961208503,
+    87.73198961208503,
+    -87.73198961208503,
+    87.73198961208503,
+    54.99999999999999,
+    125.0
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "case_id": "hem_N_h070",
+  "volume_ml_occ": 718.3775201208662,
+  "volume_ml_stl": 717.6355236338861,
+  "volume_ml_analytic": 718.3775201208663,
+  "occ_vs_analytic": -1.1102230246251565e-16,
+  "stl_vs_analytic": -0.001032878209851651,
+  "surface_area_cm2_occ": 461.8141200776996,
+  "stl_triangles": 7186,
+  "concrete_volume_ml": 12781.622479879135,
+  "bounding_box_mm": [
+    -70.0,
+    70.0,
+    -69.97824274005715,
+    69.97824274005714,
+    25.0,
+    95.0
+  ]
+}
