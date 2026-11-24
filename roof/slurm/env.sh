@@ -7,7 +7,8 @@
 # repository's CI and Docker image use. Foundation releases (openfoam.org, version
 # numbers without a "v") are NOT supported. Give ONE of these; the first one set wins:
 #   OPENFOAM_BASHRC  an installed etc/bashrc, e.g. $HOME/OpenFOAM/OpenFOAM-v2406/etc/bashrc
-#   OPENFOAM_MODULE  an environment module, e.g. openfoam/v2406     (`module avail openfoam`)
+#   OPENFOAM_MODULE  environment module(s), space-separated and loaded in order, e.g.
+#                    "gcc/9.3 openmpi/4.1 openfoam/v2406"      (`module avail openfoam`)
 #   PCM_SIF          an Apptainer/Singularity image of the repository's Docker image
 #                    (single node, MPI inside the container); roof/README.md shows how
 #                    to build it. Leave all three empty if OpenFOAM is already loaded.
@@ -17,7 +18,7 @@
 : "${OPENFOAM_MODULE:=}"
 : "${PCM_SIF:=}"
 : "${PCM_SIF_BASHRC:=/usr/lib/openfoam/openfoam2406/etc/bashrc}"   # path inside the image
-: "${PYTHON_MODULE:=}"      # module with python3 and PyYAML, e.g. anaconda3 (empty: system python3)
+: "${PYTHON_MODULE:=}"      # module(s) with python3 and PyYAML, e.g. anaconda3 (empty: system python3)
 : "${MPI_LAUNCHER:=}"       # the rank count is appended. Empty: "mpirun -np"; e.g. "srun -n"
 # export ROOF_RUNS_DIR=/scratch/$USER/roof_runs    # uncomment to write the runs on /scratch
 # ---------------------------------------------------------------------------
@@ -53,14 +54,16 @@ _roof_module() {
 }
 
 if [ -n "$PYTHON_MODULE" ]; then
-    _roof_relaxed _roof_module "$PYTHON_MODULE"
+    # shellcheck disable=SC2086  # several modules, space-separated, are loaded in order
+    _roof_relaxed _roof_module $PYTHON_MODULE
 fi
 
 if [ -n "$OPENFOAM_BASHRC" ]; then
     _roof_relaxed source "$OPENFOAM_BASHRC"
     foam() { "$@"; }
 elif [ -n "$OPENFOAM_MODULE" ]; then
-    _roof_relaxed _roof_module "$OPENFOAM_MODULE"
+    # shellcheck disable=SC2086
+    _roof_relaxed _roof_module $OPENFOAM_MODULE
     # some modules only define the bashrc location
     if [ -z "${WM_PROJECT_DIR:-}" ]; then
         for _roof_f in "${FOAM_BASH:-}" "${FOAM_BASHRC:-}"; do
