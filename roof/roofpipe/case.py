@@ -164,7 +164,7 @@ def derive(cfg: dict, n_procs: int):
 def _write_csv(path: str, cols: dict):
     keys = list(cols)
     with open(path, "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
+        w = csv.writer(f, lineterminator="\n")
         w.writerow(keys)
         for row in zip(*(cols[k] for k in keys)):
             w.writerow([f"{v:.8g}" for v in row])

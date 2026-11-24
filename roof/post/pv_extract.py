@@ -182,7 +182,7 @@ def main():
         print(f"  {name}: {hh:5.1f} h  roof {row['T_roof_C']:.2f} C  ceiling {row['T_ceiling_C']:.2f} C")
 
     with open(os.path.join(out, "surface_metrics.csv"), "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w = csv.DictWriter(f, fieldnames=list(rows[0]), lineterminator="\n")
         w.writeheader()
         for r in rows:
             w.writerow({k: f"{v:.6g}" for k, v in r.items()})

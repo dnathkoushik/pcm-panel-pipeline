@@ -66,7 +66,7 @@ def cumulative(t, q):
 
 def write_wide(path, hours, columns):
     with open(path, "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
+        w = csv.writer(f, lineterminator="\n")
         w.writerow(["hour"] + list(columns))
         for i, h in enumerate(hours):
             w.writerow([f"{h:.4f}"] + [f"{columns[c][i]:.6g}" if i < len(columns[c]) else ""
@@ -160,7 +160,7 @@ def main():
             "latent_cycled_Wh_m2": m["pcm"]["latent_cycled_Wh_m2"],
         })
     with open(os.path.join(out, "summary_all.csv"), "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w = csv.DictWriter(f, fieldnames=list(rows[0]), lineterminator="\n")
         w.writeheader()
         for r in rows:
             w.writerow({k: (f"{v:.5g}" if isinstance(v, float) else v) for k, v in r.items()})

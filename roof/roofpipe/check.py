@@ -375,7 +375,7 @@ def main(run_dir: str, plot: bool = True) -> int:
     os.makedirs(out, exist_ok=True)
     rows = res.pop("rows")
     with open(os.path.join(out, "timeseries_lastday.csv"), "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
+        w = csv.writer(f, lineterminator="\n")
         w.writerow(list(rows[0]))
         for r in rows:
             w.writerow([f"{v:.8g}" for v in r.values()])
