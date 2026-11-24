@@ -27,6 +27,8 @@ if [ -n "${ROOF_ENV_LOADED:-}" ]; then
     return 0
 fi
 MPI_LAUNCHER=${MPI_LAUNCHER:-mpirun -np}
+ROOF_ENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export ROOF_ENV_DIR
 export OPENFOAM_BASHRC OPENFOAM_MODULE PCM_SIF PCM_SIF_BASHRC PYTHON_MODULE MPI_LAUNCHER
 
 # Run "$@" without -e/-u: OpenFOAM's bashrc and module systems are not written for them.
@@ -139,4 +141,32 @@ roof_check_env() {
     echo "Python: $(python3 --version 2>&1), PyYAML found; MPI launcher: $MPI_LAUNCHER <n>"
 }
 
+# Phase 2 needs the repository's PCM fvOption, libpcmEnthalpyPorosity.so, compiled
+# once per OpenFOAM installation (into $FOAM_USER_LIBBIN). `roof_check_lib --build`
+# compiles it if missing (phase2_submit_all.sh does, on the login node).
+roof_check_lib() {
+    local src="$ROOF_ENV_DIR/../../openfoam"
+    # shellcheck disable=SC2016
+    if foam bash -c 'test -f "$FOAM_USER_LIBBIN/libpcmEnthalpyPorosity.so"'; then
+        echo "PCM library: found in \$FOAM_USER_LIBBIN"
+        return 0
+    fi
+    if [ "${1:-}" != "--build" ]; then
+        echo "libpcmEnthalpyPorosity.so is not compiled: run bash slurm/phase2_submit_all.sh" \
+             "(it builds it), or: cd openfoam && ./Allwmake" >&2
+        return 1
+    fi
+    echo "PCM library: compiling openfoam/ (log: openfoam/log.wmake) ..."
+    # shellcheck disable=SC2016
+    if ! foam bash -c 'cd "$1" && ./Allwmake' _ "$src" > "$src/log.wmake" 2>&1; then
+        tail -n 30 "$src/log.wmake" >&2
+        return 1
+    fi
+    # shellcheck disable=SC2016
+    foam bash -c 'test -f "$FOAM_USER_LIBBIN/libpcmEnthalpyPorosity.so"' \
+        || { echo "wmake finished but the library is missing: see openfoam/log.wmake" >&2; return 1; }
+    echo "PCM library: compiled"
+}
+
+export -f roof_check_env roof_check_lib
 export ROOF_ENV_LOADED=1

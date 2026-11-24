@@ -6,3 +6,5 @@ __pycache__/
 # wmake build products
 openfoam/src/*/lnInclude/
 openfoam/src/*/Make/*/
+roof/logs/
+openfoam/log.wmake
