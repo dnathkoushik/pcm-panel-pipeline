@@ -1,5 +1,6 @@
 {
   "run": "/work/roof/runs/baseline_concrete",
+  "case_id": null,
   "passed": true,
   "gates": {
     "complete": {
@@ -14,7 +15,7 @@
       "value": 0.014512289999970562,
       "limit": 0.05,
       "unit": "K",
-      "note": "max |T_s(t) - T_s(t - 24 h)|, roof and ceiling"
+      "note": "max |T(t) - T(t - 24 h)|, roof and ceiling surfaces"
     },
     "reference": {
       "pass": true,
@@ -67,7 +68,7 @@
       "roof_in": 1252.935521974574,
       "ceiling_gain_net": 1252.9422452839492,
       "cooling_load": 1252.9422452839492,
-      "heating_load": -0.0,
+      "heating_load": 0.0,
       "total_load": 1252.9422452839492,
       "stored_change": -0.006975730668606654
     },
