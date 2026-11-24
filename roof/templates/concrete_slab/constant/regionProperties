@@ -1,0 +1,21 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/concrete_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      regionProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Phase 1: the pure concrete slab is one solid region. Phase 2 adds the PCM.
+regions
+(
+    fluid       ()
+    solid       (concrete)
+);
+
+// ************************************************************************* //
