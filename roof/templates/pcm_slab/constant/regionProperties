@@ -1,0 +1,22 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/pcm_slab, an overlay on concrete_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      regionProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Phase 2: the concrete slab and the embedded PCM body, both solid regions.
+// The PCM is conduction + latent heat (pcmEnthalpyPorositySource, constant/pcm/fvOptions).
+regions
+(
+    fluid       ()
+    solid       (concrete pcm)
+);
+
+// ************************************************************************* //

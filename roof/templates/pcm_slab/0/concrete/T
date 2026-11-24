@@ -1,0 +1,64 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/pcm_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    location    "0/concrete";
+    object      T;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// The same outdoor and indoor conditions as the Phase 1 baseline; the interface
+// to the embedded PCM body is coupled (flux continuity, perfect contact).
+dimensions      [0 0 0 1 0 0 0];
+
+internalField   uniform @T0@;
+
+boundaryField
+{
+    // sides (adiabatic), and any empty patch splitMeshRegions keeps
+    ".*"
+    {
+        type            zeroGradient;
+    }
+
+    roof
+    {
+        type            externalWallHeatFluxTemperature;
+        mode            coefficient;
+        Ta              table
+        (
+@TA_ROOF@
+        );
+        h               uniform @H_OUT@;
+        kappaMethod     solidThermo;
+        value           uniform @T0@;
+    }
+
+    // indoor.mode = @INDOOR_MODE@
+    ceiling
+    {
+        type            externalWallHeatFluxTemperature;
+        mode            coefficient;
+        Ta              table
+        (
+@TA_CEILING@
+        );
+        h               uniform @H_IN@;
+        kappaMethod     solidThermo;
+        value           uniform @T0@;
+    }
+
+    concrete_to_pcm
+    {
+        type            compressible::turbulentTemperatureCoupledBaffleMixed;
+        Tnbr            T;
+        kappaMethod     solidThermo;
+        value           uniform @T0@;
+    }
+}
+
+// ************************************************************************* //

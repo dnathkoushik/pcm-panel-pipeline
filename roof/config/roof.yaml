@@ -85,6 +85,40 @@ materials:
     rho: 2710.0                   # [PAPER] Sec. 2.3
     cp: 904.0                     # [PAPER] Table 4
 
+pcm_study:                        # Phase 2: 3 shapes x 2 orientations x 5 heights = 30 cases
+  shapes: [tet, pyr, hem]         # tetrahedron, pyramid, hemisphere (roofpipe/geometry.py)
+  orientations: [N, I]            # N: base on the ceiling side, apex up; I: base on the roof side
+  heights_mm: [40, 55, 70, 85, 100]
+                                  # the volume changes only through the height. With the shared
+                                  #   base area below, V = A h / 3 = 0.41, 0.56, 0.72, 0.87, 1.03 L
+                                  #   for every shape; 0.72 L x 860 kg/m3 = 618 g is the paper's
+                                  #   600 g of OM37 per void former (Sec. 3.7)
+  hemisphere_radius_mm: 70.0      # base radius of the hemisphere, a true hemisphere at h = 70 mm.
+                                  #   Tetrahedron and pyramid bases: A = 2 pi r^2 = 30 788 mm2
+                                  #   (pyramid 175.5 mm square, tetrahedron 266.6 mm triangle)
+  cover_mm: 25.0                  # [ASSUMPTION] concrete above and below the PCM body, as a
+                                  #   rebar cover; the body spans z = 25 .. 125 mm at most
+  min_side_margin_mm: 10.0        # concrete left between the body and the cell side
+  pcm: OM37                       # materials entry
+  model: conduction               # PCM as a solid region: conduction + latent heat (enthalpy
+                                  #   method). In a roof the heat comes from above, so the melt
+                                  #   sits on top of the solid and stays stably stratified
+  melting_range_C: [36.4, 44.06]  # [PAPER] Sec. 2.2, DSC melting onset and end (mean of 3)
+  rho_basis: liquid               # liquid | solid: one density in the model; liquid = the mass a
+                                  #   capsule filled with melt holds (conservative latent store)
+  mesh:
+    cell: 0.005                   # background cube [m]: 60 x 60 x 30 over the slab
+    pcm_level: 1                  # refinement inside the PCM and on its surface: 2.5 mm
+    feature_level: 2              # on the edges and the apex: 1.25 mm
+    n_cells_between_levels: 2
+    stl_tolerance_mm: 0.05
+  run:
+    deltaT: 30.0                  # [s] = the baseline's. roof/tests/om37_timestep.py against the
+                                  #   converged enthalpy method: liquid fraction within 0.001,
+                                  #   stored energy within 0.03 % (60 s: 0.002 / 0.06 %)
+    nOuterCorrectors: 2           # latent-heat Newton iterations per step (3 gives the same)
+    write_interval_h: 3.0         # fields every 3 h: 9 on the analysed day for Phase 3 contours
+
 mesh:
   cell_xy: 0.010                  # lateral cell size. The baseline is 1D; its lateral cells only
                                   #   exercise the 3D set-up (30 x 30 columns)

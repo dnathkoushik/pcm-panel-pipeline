@@ -1,0 +1,35 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/pcm_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    location    "0/pcm";
+    object      T;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Same uniform start as the concrete; the spin-up days wash it out.
+dimensions      [0 0 0 1 0 0 0];
+
+internalField   uniform @T0@;
+
+boundaryField
+{
+    ".*"
+    {
+        type            zeroGradient;
+    }
+
+    pcm_to_concrete
+    {
+        type            compressible::turbulentTemperatureCoupledBaffleMixed;
+        Tnbr            T;
+        kappaMethod     solidThermo;
+        value           uniform @T0@;
+    }
+}
+
+// ************************************************************************* //

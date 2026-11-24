@@ -1,0 +1,115 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/pcm_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      snappyHexMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Case @CASE_ID@: the PCM body (constant/triSurface/pcm_body.stl, from FreeCAD)
+// castellated and snapped into the slab's block mesh. locationsInMesh makes the
+// cellZones `pcm` and `concrete`; splitMeshRegions -cellZones then makes the two
+// regions with the conformal interface patches concrete_to_pcm / pcm_to_concrete.
+// Same structure as the CI-verified multi-region mesh of pcmpipe/mesh.py.
+
+castellatedMesh true;
+snap            true;
+addLayers       false;
+
+geometry
+{
+    pcm_body.stl
+    {
+        type    triSurfaceMesh;
+        name    pcm_body;
+    }
+}
+
+castellatedMeshControls
+{
+    maxLocalCells       5000000;
+    maxGlobalCells      40000000;
+    minRefinementCells  10;
+    maxLoadUnbalance    0.10;
+    nCellsBetweenLevels @N_BETWEEN@;
+
+    features
+    (
+        { file "pcm_body.eMesh"; level @FEATURE_LEVEL@; }
+    );
+
+    refinementSurfaces
+    {
+        // no faceZone here: the unnamed surface bounds the locationsInMesh walk
+        pcm_body
+        {
+            level (@PCM_LEVEL@ @PCM_LEVEL@);
+        }
+    }
+
+    resolveFeatureAngle 30;
+
+    refinementRegions
+    {
+        pcm_body
+        {
+            mode    inside;
+            levels  ((1e15 @PCM_LEVEL@));
+        }
+    }
+
+    locationsInMesh
+    (
+        (@LOC_PCM@ pcm)
+        (@LOC_CONCRETE@ concrete)
+    );
+    allowFreeStandingZoneFaces false;
+}
+
+snapControls
+{
+    nSmoothPatch            3;
+    tolerance               2.0;
+    nSolveIter              100;
+    nRelaxIter              5;
+    nFeatureSnapIter        15;
+    implicitFeatureSnap     false;
+    explicitFeatureSnap     true;
+    multiRegionFeatureSnap  true;
+}
+
+addLayersControls
+{
+    relativeSizes       true;
+    layers              { }
+    expansionRatio      1.2;
+    finalLayerThickness 0.5;
+    minThickness        0.1;
+    nGrow               0;
+    featureAngle        60;
+    nRelaxIter          3;
+    nSmoothSurfaceNormals 1;
+    nSmoothNormals      3;
+    nSmoothThickness    10;
+    maxFaceThicknessRatio 0.5;
+    maxThicknessToMedialRatio 0.3;
+    minMedialAxisAngle  90;
+    nBufferCellsNoExtrude 0;
+    nLayerIter          50;
+}
+
+meshQualityControls
+{
+    #includeEtc "caseDicts/meshQualityDict"
+    nSmoothScale    4;
+    errorReduction  0.75;
+}
+
+mergeTolerance 1e-6;
+
+// ************************************************************************* //

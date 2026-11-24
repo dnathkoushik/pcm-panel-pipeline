@@ -1,0 +1,37 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/pcm_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant/pcm";
+    object      thermophysicalProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// @PCM_NAME@ as a solid region. The thermo package carries reference values
+// (Cp, kappa); pcmEnthalpyPorositySource (fvOptions) adds the true solid/liquid
+// cp and k, linear in the mushy zone, and the latent heat.
+// rho: @RHO_NOTE@
+thermoType
+{
+    type            heSolidThermo;
+    mixture         pureMixture;
+    transport       constIso;
+    thermo          hConst;
+    equationOfState rhoConst;
+    specie          specie;
+    energy          sensibleEnthalpy;
+}
+
+mixture
+{
+    specie          { molWeight 300; }
+    transport       { kappa @K_PCM_REF@; }
+    thermodynamics  { Hf 0; Cp @CP_PCM_REF@; }
+    equationOfState { rho @RHO_PCM@; }
+}
+
+// ************************************************************************* //

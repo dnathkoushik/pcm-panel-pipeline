@@ -1,0 +1,38 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  roofpipe template (roof/templates/pcm_slab)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant/pcm";
+    object      fvOptions;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Enthalpy method for @PCM_NAME@ (openfoam/src/pcmEnthalpyPorositySource, the
+// repository's verified fvOption): H = int cp dT + gamma L, gamma linear in T
+// between Tsolidus and Tliquidus. Solid region: no flow, so no latent convection
+// and no momentum sink (Amush, epsilon are read but unused).
+pcmPhaseChange
+{
+    type            pcmEnthalpyPorositySource;
+    active          yes;
+    selectionMode   all;
+    energyField     h;
+
+    Tsolidus        @T_SOLIDUS@;
+    Tliquidus       @T_LIQUIDUS@;
+    L               @LATENT@;
+    Amush           1e+06;
+    epsilon         0.001;
+    CpSolid         @CP_SOLID@;
+    CpLiquid        @CP_LIQUID@;
+    kappaSolid      @K_SOLID@;
+    kappaLiquid     @K_LIQUID@;
+    latentConvection false;
+    kinkLimiter     true;
+}
+
+// ************************************************************************* //
