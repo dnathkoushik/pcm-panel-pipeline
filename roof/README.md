@@ -15,12 +15,40 @@ is unchanged. This directory only reuses its solver choice (openfoam.com
 | Phase | Content | Status |
 |---|---|---|
 | 1 | Pure concrete slab (the paper's Ref-SU): geometry, mesh, OpenFOAM case, SLURM job, verification gates | **passed** (tag `roof-phase1`); results in `results/phase1_baseline_concrete/` |
-| 2 | 3 shapes × 2 orientations × 5 heights = 30 PCM cases, one SLURM job each | code verified on real runs; see [Phase 2](#phase-2-30-pcm-cases) |
-| 3 | `pvpython` extraction to small files; paper-style temperature, heat-flux, HGR and thermal-load figures | see [Phase 3](#phase-3-extraction-and-figures) |
+| 2 | 3 shapes × 2 orientations × 5 heights = 30 PCM cases, one SLURM job each | **passed**, all 30 cases (tag `roof-phase2`); results in `results/phase2/` |
+| 3 | `pvpython` extraction to small files; paper-style temperature, heat-flux, HGR and thermal-load figures | **done** (tag `roof-phase3`); `results/phase3/`, summary in [Results](#results) |
 
 Every phase was run end to end in the repository's Docker image (OpenFOAM v2406,
 FreeCAD 0.21, ParaView 5.11) on a 12-core workstation. The same scripts run on PARAM
 Shakti through SLURM.
+
+## Results
+
+Design day, room held at 26 °C, every case against the plain slab at the same time step
+(`baseline_dt60`: peak heat gain 101.5 W/m² at 17:15, cooling load 1,253 Wh/m² a day,
+peak ceiling 42.56 °C). All 30 cases pass every gate.
+
+| | HGR_max (Eq. 8) | Cooling load cut | Peak ceiling T |
+|---|---|---|---|
+| Best: pyramid, normal, 1.03 L (`pyr_N_h100`) | 16.2 % | 5.6 % (1,183 Wh/m²) | −2.68 K |
+| Tetrahedron, normal, 1.03 L | 16.2 % | 5.3 % | −2.69 K |
+| Hemisphere, normal, 1.03 L | 12.3 % | 3.8 % | −2.04 K |
+| Pyramid, normal, 0.72 L (the paper's 600 g) | 14.2 % | 4.8 % | −2.35 K |
+| Pyramid at 1.03 L **without latent heat** (control) | 7.4 % | 5.7 % | −1.22 K |
+
+- Volume matters most: about +1 point of HGR_max per 150 mL, still rising at 1.03 L.
+- At equal volume the tetrahedron and pyramid (base 30,788 mm²) beat the hemisphere
+  (15,394 mm²) by 3–4 points of HGR_max; they are within 0.3 points of each other.
+- Normal beats inverted by 1.2 points at 40 mm; the gap closes by 100 mm. Small inverted
+  bodies melt through (liquid fraction 1.0 from 17:25 to 18:55) at the room's peak.
+- The control run shows that the daily load cut comes from OM37's low conductivity
+  (0.145 against 1.58 W/m·K), while melting more than doubles the peak cut.
+- Every case refreezes completely each night; the normal 600 g pyramid uses 54 % of
+  its latent store, the inverted one 86 %.
+
+Full table: `results/phase3/summary_all.csv`; figures `results/phase3/fig1`–`fig7`; the
+complete report, with the comparison against the paper's measurements, is
+`results/Roof_PCM_Simulation_Report.pdf`.
 
 ## Layout
 
@@ -54,7 +82,7 @@ roof/
 │   ├── phase2_submit_all.sh    builds the PCM library, submits every case not yet passed
 │   └── phase3_post.sbatch      pv_extract on every case, then collect
 ├── tests/om37_timestep.py      time-step check of the PCM model against the converged method
-└── results/                    kept in git: phase1_baseline_concrete/, phase2/, phase3/
+└── results/                    kept in git: phase1_*/, phase2_baseline_dt60/, phase2/<case>/, phase3/
 ```
 
 ## Phase 1: the pure concrete baseline
@@ -262,7 +290,11 @@ on the analysed day's field snapshots (every 3 h), for what needs the 3D fields:
 | `timeseries_load_cumulative_Wh_m2.csv`, `timeseries_liquid_fraction.csv` | cumulative cooling load; PCM liquid fraction |
 | `fig1_temperature_h070.png` | temperature variation vs time, T_amb, T_ext, T_int,Ref, T_int,Exp (paper Figs. 7–8) |
 | `fig2_heatflux_h070.png` | indoor heat flux vs time (Fig. 9) |
-| `fig3_thermal_load.png` | daily cooling load per case against the plain slab (Fig. 13) |
+| `fig3_thermal_load.png` | daily cooling load per case against the plain slab (Fig. 13), and the load each case saves |
 | `fig4_hgr_vs_volume.png` | maximum heat-gain reduction vs PCM volume (Eq. 8, Fig. 12) |
 | `fig5_liquid_fraction_h070.png` | melting and solidification over the day |
 | `fig6_ceiling_T_all.png` | ceiling temperature of all 30 cases |
+| `fig7_melting_front_pyr_h070.png` | mid-plane T contours with the melting front, normal and inverted pyramid at 70 mm, 12:00–21:00 (composed from the case contours) |
+| `contours/<case>/` | every case's `pv_extract` contours (every 3 h) and `surface_metrics.csv`; the slice CSVs stay in `runs/` |
+| `control_pyr_N_h100_no_latent/` | the best design with OM37's latent heat set to 100 J/kg (`--set materials.OM37.latent_heat=100`) |
+| `specimen_*` | the paper's test-unit set-up (`--set indoor.mode=specimen`): plain slab and the 600 g pyramid |

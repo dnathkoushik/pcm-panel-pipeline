@@ -230,11 +230,12 @@ def main():
         plt.close(fig)
 
     if cases:
-        # Fig 3: thermal loads (paper Fig. 13), cooling bars per height, one panel per orientation
+        # Fig 3: thermal loads (paper Fig. 13). Top: daily cooling load per case against the
+        # plain slab; bottom: the load each case saves (the difference is small next to the load)
         hs = [int(h) for h in cfg["pcm_study"]["heights_mm"]]
-        fig, axes = plt.subplots(1, 2, figsize=(12, 4.6), sharey=True)
+        fig, axes = plt.subplots(2, 2, figsize=(12, 7.6), sharex=True, sharey="row")
         width = 0.26
-        for ax, o in zip(axes, ("N", "I")):
+        for col, o in enumerate(("N", "I")):
             for k, sh in enumerate(("tet", "pyr", "hem")):
                 xs, ys = [], []
                 for i, h in enumerate(hs):
@@ -242,30 +243,41 @@ def main():
                     if r is not None:
                         xs.append(i + (k - 1) * width)
                         ys.append(r["summary"]["metrics"]["daily_Wh_m2"]["cooling_load"])
-                ax.bar(xs, ys, width=width - 0.03, color=SHAPE_COLOR[sh], label=SHAPE_NAME[sh],
-                       edgecolor=SURFACE, linewidth=1.0)
-            ax.axhline(b_cool, color=REF_COLOR, lw=1.5, ls="--")
-            ax.annotate(f"no PCM: {b_cool:.0f} Wh/m²", (len(hs) - 0.5, b_cool), xytext=(0, 4),
-                        textcoords="offset points", ha="right", fontsize=8, color=INK2)
+                for row, vals in ((0, ys), (1, [b_cool - y for y in ys])):
+                    axes[row, col].bar(xs, vals, width=width - 0.03, color=SHAPE_COLOR[sh],
+                                       label=SHAPE_NAME[sh] if (row, col) == (0, 0) else None,
+                                       edgecolor=SURFACE, linewidth=1.0)
+                for x, y in zip(xs, ys):
+                    axes[1, col].annotate(f"{b_cool - y:.0f}", (x, b_cool - y), xytext=(0, 2),
+                                          textcoords="offset points", ha="center", fontsize=7,
+                                          color=INK2)
+            top_ax = axes[0, col]
+            top_ax.axhline(b_cool, color=REF_COLOR, lw=1.5, ls="--")
+            top_ax.annotate(f"no PCM: {b_cool:.0f} Wh/m²", (len(hs) - 0.5, b_cool), xytext=(0, 4),
+                            textcoords="offset points", ha="right", fontsize=8, color=INK2)
+            top_ax.set_ylim(0, b_cool * 1.12)
+            top_ax.set_title(ORIENT_NAME[o])
             vols = [geometry.body(cfg, "pyr", o, h * 1e-3).volume * 1e6 for h in hs]
-            ax.set_xticks(range(len(hs)), [f"{h} mm\n{v:.0f} mL" for h, v in zip(hs, vols)])
-            ax.set_xlabel("PCM height and volume (equal for every shape)")
-            ax.set_title(ORIENT_NAME[o])
-            ax.grid(axis="x", visible=False)
-        axes[0].set_ylabel("Daily cooling load (Wh/m²)")
-        axes[1].legend(fontsize=8, loc="lower left")
+            axes[1, col].set_xticks(range(len(hs)), [f"{h} mm\n{v:.0f} mL" for h, v in zip(hs, vols)])
+            axes[1, col].set_xlabel("PCM height and volume (equal for every shape)")
+            for row in (0, 1):
+                axes[row, col].grid(axis="x", visible=False)
+        axes[0, 0].set_ylabel("Daily cooling load (Wh/m²)")
+        axes[1, 0].set_ylabel("Load saved against no PCM (Wh/m²)")
         heat_note = ("" if all(r["summary"]["metrics"]["daily_Wh_m2"]["heating_load"] < 0.5
                                for r in [base, *cases.values()])
                      else "  (heating loads in summary_all.csv)")
         fig.suptitle("Thermal load through the roof, room held at "
                      f"{cfg['indoor']['T_set_C']:g} °C{heat_note}", fontsize=12)
-        fig.tight_layout()
+        fig.legend(loc="upper center", bbox_to_anchor=(0.5, 0.955), ncol=3, fontsize=9)
+        fig.tight_layout(rect=(0, 0, 1, 0.93))
         fig.savefig(os.path.join(out, "fig3_thermal_load.png"), dpi=160)
         plt.close(fig)
 
         # Fig 4: HGR_max vs volume (paper Eq. 8, Fig. 12)
         fig, axes = plt.subplots(1, 2, figsize=(12, 4.2), sharey=True)
         for ax, o in zip(axes, ("N", "I")):
+            ends = []
             for sh in ("tet", "pyr", "hem"):
                 pts = [(r["volume_mL"], r["HGR_max_pct"]) for r in rows[1:]
                        if r["shape"] == sh and r["orientation"] == o]
@@ -273,8 +285,20 @@ def main():
                 if pts:
                     ax.plot([p[0] for p in pts], [p[1] for p in pts], color=SHAPE_COLOR[sh],
                             marker="o", ms=6, label=SHAPE_NAME[sh])
-                    label_end(ax, [p[0] for p in pts], [p[1] for p in pts], SHAPE_NAME[sh],
-                              SHAPE_COLOR[sh])
+                    ends.append((pts[-1][1], pts[-1][0], SHAPE_NAME[sh]))
+            # one end label per cluster: lines that end within 0.5 % share a label
+            ends.sort()
+            groups = []
+            for y, x, name in ends:
+                if groups and y - groups[-1][0][-1] < 0.5:
+                    groups[-1][0].append(y)
+                    groups[-1][2].append(name)
+                else:
+                    groups.append(([y], x, [name]))
+            for ys_, x, names in groups:
+                label_end(ax, [x], [sum(ys_) / len(ys_)], " / ".join(names), INK2)
+            lo, hi = ax.get_xlim()
+            ax.set_xlim(lo, hi + 0.25 * (hi - lo))          # room for the end labels
             ax.axhline(0.0, color=MUTED, lw=0.8)
             ax.set_title(ORIENT_NAME[o])
             ax.set_xlabel("PCM volume per 300 × 300 mm cell (mL)")
@@ -326,6 +350,41 @@ def main():
         fig.tight_layout()
         fig.savefig(os.path.join(out, "fig6_ceiling_T_all.png"), dpi=160)
         plt.close(fig)
+
+        # Fig 7: the melting front, normal and inverted pyramid at 70 mm, from the
+        # pv_extract contours (skipped until post/pv_extract.py has run on both cases)
+        times = [("12p0h", "12:00"), ("15p0h", "15:00"), ("18p0h", "18:00"), ("21p0h", "21:00")]
+        pair = [(geometry.case_id("pyr", o, ref_h * 1e-3), name) for o, name in
+                (("N", "Normal"), ("I", "Inverted"))]
+        pngs = {(cid, tk): os.path.join(runs, cid, "results", "pv", f"contour_T_{tk}.png")
+                for cid, _ in pair for tk, _ in times}
+        if all(os.path.isfile(p) for p in pngs.values()):
+            from matplotlib import image as mpimg
+            crop = (slice(92, 668), slice(130, 1270))          # the slab in pv_extract's 1400 x 760
+            fig = plt.figure(figsize=(15, 4.6))
+            gs = fig.add_gridspec(2, len(times) + 1, width_ratios=[1] * len(times) + [0.32],
+                                  wspace=0.04, hspace=0.06)
+            for i, (cid, name) in enumerate(pair):
+                for j, (tk, label) in enumerate(times):
+                    ax = fig.add_subplot(gs[i, j])
+                    ax.imshow(mpimg.imread(pngs[(cid, tk)])[crop])
+                    ax.set_xticks([])
+                    ax.set_yticks([])
+                    ax.grid(False)
+                    for sp in ax.spines.values():
+                        sp.set_visible(False)
+                    if i == 0:
+                        ax.set_title(label, fontsize=11)
+                    if j == 0:
+                        ax.set_ylabel(name, fontsize=11, color=INK)
+            cb = fig.add_subplot(gs[:, -1])
+            cb.imshow(mpimg.imread(pngs[(pair[0][0], times[0][0])])[488:756, 1318:1400])
+            cb.axis("off")
+            fig.suptitle(f"Melting front, pyramid at {ref_h} mm: vertical mid-plane, roof on top; "
+                         "white: liquid fraction 0.5, cyan: PCM outline", fontsize=12)
+            fig.savefig(os.path.join(out, "fig7_melting_front_pyr_h070.png"), dpi=160,
+                        bbox_inches="tight")
+            plt.close(fig)
 
     print(f"-> {out}")
     for r in rows:
