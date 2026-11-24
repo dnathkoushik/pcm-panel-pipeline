@@ -167,7 +167,7 @@ def _write_csv(path: str, cols: dict):
         w = csv.writer(f)
         w.writerow(keys)
         for row in zip(*(cols[k] for k in keys)):
-            w.writerow([f"{v:.6g}" for v in row])
+            w.writerow([f"{v:.8g}" for v in row])
 
 
 def build_baseline(cfg: dict, name: str, n_procs: int, force: bool = False) -> str:

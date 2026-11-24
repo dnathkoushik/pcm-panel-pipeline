@@ -311,7 +311,7 @@ def main(run_dir: str, plot: bool = True) -> int:
         w = csv.writer(f)
         w.writerow(list(rows[0]))
         for r in rows:
-            w.writerow([f"{v:.6g}" for v in r.values()])
+            w.writerow([f"{v:.8g}" for v in r.values()])
     with open(os.path.join(out, "summary.json"), "w", encoding="utf-8") as f:
         json.dump(res, f, indent=2)
     res["rows"] = rows
